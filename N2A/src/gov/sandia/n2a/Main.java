@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -27,6 +27,7 @@ import gov.sandia.n2a.plugins.extpoints.ShutdownHook;
 import gov.sandia.n2a.ui.MainFrame;
 import gov.sandia.n2a.ui.Utility;
 import gov.sandia.n2a.ui.eq.PanelEquations;
+import gov.sandia.n2a.ui.images.ImageUtil;
 import gov.sandia.n2a.ui.jobs.NodeJob;
 import gov.sandia.n2a.ui.jobs.OutputParser;
 import gov.sandia.n2a.ui.jobs.OutputParser.Column;
@@ -51,12 +52,17 @@ import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 
+import javax.swing.ImageIcon;
 import javax.swing.JFrame;
+import javax.swing.JLabel;
 import javax.swing.JOptionPane;
+import javax.swing.JWindow;
 
 
 public class Main
 {
+    public static JWindow splash;
+
     public static void main (String[] args)
     {
         // Parse command line
@@ -108,7 +114,29 @@ public class Main
             }
         }
 
-        if (headless.isEmpty ()) setUncaughtExceptionHandler (null);
+        if (headless.isEmpty ())
+        {
+            setUncaughtExceptionHandler (null);
+
+            // Get rid of eye-stab HiDPI scaling in recent JDKs. Instead, we handle DPI in SettingsLookAndFeel.
+            // Must be done before any code activates Swing.
+            System.setProperty ("sun.java2d.uiScale", "1.0");
+
+            // Show splash screen. (Activates Swing.)
+            EventQueue.invokeLater (new Runnable ()
+            {
+                public void run ()
+                {
+                    splash = new JWindow ();
+                    ImageIcon image = ImageUtil.getImage ("n2a-splash.png");
+                    JLabel label = new JLabel (image);
+                    splash.getContentPane ().add (label);
+                    splash.pack ();
+                    splash.setLocationRelativeTo (null);
+                    splash.setVisible (true);
+                }
+            });
+        }
 
         // Set global application properties.
         AppData.properties.set ("Neurons to Algorithms", "name");
@@ -117,10 +145,6 @@ public class Main
         AppData.properties.set (! headless.isEmpty (),   "headless");
         AppData.checkInitialDB ();
         Path resourceDir = Paths.get (AppData.properties.get ("resourceDir"));
-
-        // Get rid of eye-stab HiDPI scaling in recent JDKs. Instead, we handle DPI in SettingsLookAndFeel.
-        // Must be done before any code activates Swing.
-        System.setProperty ("sun.java2d.uiScale", "1.0");
 
         // Load plugins
         Path pluginDir = resourceDir.resolve ("plugins").toAbsolutePath ();
@@ -202,6 +226,8 @@ public class Main
                 new MainFrame ();
                 SettingsLookAndFeel.rescaling = false;
                 setUncaughtExceptionHandler (MainFrame.instance);
+                splash.dispose ();
+                splash = null;
             }
         });
     }
@@ -525,7 +551,7 @@ public class Main
         {
             public void uncaughtException (Thread thread, final Throwable throwable)
             {
-                if (throwable instanceof ThreadDeath) return;  // Caused by Thread.stop(), which only occurs in InternalBackend.kill(). Should be ignored.
+                if (throwable instanceof InterruptedException) return;  // Caused by (sort of) killing a backend thread. Should be ignored.
 
                 Path crashdump = Paths.get (AppData.properties.get ("resourceDir"), "crashdump");
                 try

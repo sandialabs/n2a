@@ -1,11 +1,12 @@
 /*
-Copyright 2016-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
 
 package gov.sandia.n2a.ui.settings;
 
+import gov.sandia.n2a.Main;
 import gov.sandia.n2a.db.AppData;
 import gov.sandia.n2a.plugins.extpoints.Settings;
 import gov.sandia.n2a.ui.Lay;
@@ -30,7 +31,6 @@ import java.util.TreeSet;
 import javax.swing.Box;
 import javax.swing.ButtonGroup;
 import javax.swing.ImageIcon;
-import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JRadioButton;
@@ -138,12 +138,7 @@ public class SettingsLookAndFeel extends JPanel implements Settings
             FontMetrics fm;
             if (MainFrame.instance == null)
             {
-                // Application is still booting, so create a temporary hidden window.
-                JFrame temp = new JFrame ();
-                temp.setExtendedState (JFrame.ICONIFIED);
-                temp.setVisible (true);  // Create graphics context.
-                fm = temp.getGraphics ().getFontMetrics (font);
-                temp.dispose ();  // At this moment, this is the last window. However, the app does not exit because our main thread is still running.
+                fm = Main.splash.getGraphics ().getFontMetrics (font);
             }
             else
             {
