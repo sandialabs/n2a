@@ -19,6 +19,7 @@ import java.awt.EventQueue;
 import java.awt.Font;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.HashSet;
 
@@ -62,7 +63,7 @@ public class SettingsC extends SettingsBackend
                 h.objects.remove ("ffmpegIncDir");
                 h.objects.remove ("ffmpegBinDir");
                 h.objects.remove ("glLibs");        // ditto for OpenGL
-                // Once a DLL is loaded, the user needs to restart JVM to get an updated version.
+                // Once a DLL is loaded, the user must restart JVM to get an updated version.
                 // Therefore, no point in removing "ffmpegJNI" or "JNI".
                 h.config.set ("", "backend", "c", "compilerChanged");
                 clearMessage (h);
@@ -180,16 +181,29 @@ public class SettingsC extends SettingsBackend
     @Override
     public void bind (MNode parent)
     {
-        fieldCpp   .bind (parent, "cxx",    "g++");
-        fieldFFmpeg.bind (parent, "ffmpeg", "");
-        fieldHDF   .bind (parent, "hdf",    "");
-        fieldJNI   .bind (parent, "jni_md", "");
-        fieldGL    .bind (parent, "gl",     "");
-
         Host h = (Host) list.getSelectedValue ();
+
+        CompilerFactory cxx          = (CompilerFactory) h.objects.get ("cxx");
+        Path            ffmpegLibDir = (Path)            h.objects.get ("ffmpegLibDir");
+        Path            hdfLibDir    = (Path)            h.objects.get ("hdfLibDir");
+        Path            jniIncMdDir  = (Path)            h.objects.get ("jniIncMdDir");
+        Path            glLib        = (Path)            h.objects.get ("glLib");
+
+        fieldCpp   .bind (parent, "cxx",    cxx          == null ? "g++" : cxx.path () .toString ());
+        fieldFFmpeg.bind (parent, "ffmpeg", ffmpegLibDir == null ? ""    : ffmpegLibDir.toString ());
+        fieldHDF   .bind (parent, "hdf",    hdfLibDir    == null ? ""    : hdfLibDir   .toString ());
+        fieldJNI   .bind (parent, "jni_md", jniIncMdDir  == null ? ""    : jniIncMdDir .toString ());
+        fieldGL    .bind (parent, "gl",     glLib        == null ? ""    : glLib       .toString ());
+
         boolean localhost = h.name.equals ("localhost");
         labelMessages.setVisible (localhost);
         textMessages .setVisible (localhost);
+    }
+
+    public void rebind (Host h)
+    {
+        // Only bind if the updated host (h) is currently selected.
+        if (list.getSelectedValue () == h) bind (h.config.childOrCreate ("backend", key));
     }
 
     @Override

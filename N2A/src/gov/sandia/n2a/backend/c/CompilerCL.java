@@ -1,5 +1,5 @@
 /*
-Copyright 2022-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2022-2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -120,6 +120,11 @@ public class CompilerCL extends Compiler
         public Compiler compiler (Path localJobDir)
         {
             return new CompilerCL (host, localJobDir, cl, MSVCroot, SDKroot, SDKversion, arch);
+        }
+
+        public Path path ()
+        {
+            return cl;
         }
 
         public String suffixBinary ()

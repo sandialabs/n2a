@@ -1,17 +1,27 @@
 /*
-Copyright 2013-2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
 
 package gov.sandia.n2a.backend.c;
 
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.nio.file.DirectoryStream;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.TreeSet;
 
+import gov.sandia.n2a.db.JSON;
 import gov.sandia.n2a.db.MNode;
+import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.host.Host;
+import gov.sandia.n2a.host.Windows;
+import gov.sandia.n2a.host.Host.AnyProcess;
 import gov.sandia.n2a.plugins.extpoints.Backend;
 
 public class BackendC extends Backend
@@ -51,8 +61,38 @@ public class BackendC extends Backend
         Object o = host.objects.get ("cxx");
         if (o instanceof CompilerFactory) return (CompilerFactory) o;
 
+        String exePathString = host.config.get ("backend", "c", "cxx");
+        if (exePathString.isBlank ())  // User did not specify compiler, so probe the system for common options.
+        {
+            exePathString = "g++";  // Fallback value.
+            if (host instanceof Windows)
+            {
+                try (AnyProcess proc = host.build ("C:/Program Files (x86)/Microsoft Visual Studio/Installer/vswhere", "-latest", "-utf8", "-format", "json").start ();
+                     BufferedReader reader = new BufferedReader (new InputStreamReader (proc.getInputStream ())))
+                {
+                    MNode result = new MVolatile ();
+                    new JSON ().read (result, reader);
+                    if (! result.isEmpty ())
+                    {
+                        // result contains a list of installations. We take the first one.
+                        Path base = Paths.get (result.get (0, "installationPath"));
+                        // Now tack on the appropriate paths. See CompilerCL.java for comments about directory structure.
+                        Path MSVC = base.resolve ("VC").resolve ("Tools").resolve ("MSVC");
+                        //   Unfortunately, there doesn't seem to be a simple way to get the right version number.
+                        TreeSet<String> sorted = new TreeSet<String> ();
+                        try (DirectoryStream<Path> dir = Files.newDirectoryStream (MSVC))
+                        {
+                            for (Path p : dir) sorted.add (p.getFileName ().toString ());
+                        }
+                        Path ver = MSVC.resolve (sorted.last ());
+                        exePathString = ver.resolve ("bin").resolve ("Hostx64").resolve ("x64").resolve ("cl.exe").toString ();
+                    }
+                }
+                catch (Exception e) {}
+            }
+        }
+
         // The most simple-minded approach is to guess compiler identity from the executable's name.
-        String exePathString = host.config.getOrDefault ("g++", "backend", "c", "cxx");
         Path   exePath       = host.getResourceDir ().getFileSystem ().getPath (exePathString);
         String exeName       = exePath.getFileName ().toString ();
         int pos = exeName.lastIndexOf ('.');

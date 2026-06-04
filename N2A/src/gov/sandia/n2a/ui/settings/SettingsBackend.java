@@ -1,5 +1,5 @@
 /*
-Copyright 2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2021-2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -40,9 +40,9 @@ public abstract class SettingsBackend implements Settings, ChangeListener
     protected ImageIcon icon;
 
     protected JScrollPane            scrollPane;
-    protected DefaultListModel<Host> model  = new DefaultListModel<Host> ();
+    protected DefaultListModel<Host> model = new DefaultListModel<Host> ();
     protected JList<Host>            list;
-    protected JPanel                 editor = new JPanel ();
+    protected JPanel                 editor;
 
     /**
         Derived class should do the following in ctor:

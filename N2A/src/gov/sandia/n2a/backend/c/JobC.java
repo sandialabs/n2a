@@ -310,7 +310,7 @@ public class JobC extends Thread
         if (ps != System.err) ps.close ();
     }
 
-    public static boolean contains (Path dir, String prefix, String name, String suffix)
+    public static Path contains (Path dir, String prefix, String name, String suffix)
     {
         try (DirectoryStream<Path> stream = Files.newDirectoryStream (dir))
         {
@@ -321,11 +321,11 @@ public class JobC extends Thread
                 if (! fileName.endsWith   (suffix)) continue;
                 // There is a potential for ambiguity here, if name contains part of the prefix
                 // or suffix, but that is unlikely in practice. 
-                if (fileName.contains (name)) return true;
+                if (fileName.contains (name)) return path;
             }
         }
         catch (IOException e) {}
-        return false;
+        return null;
     }
 
     @SuppressWarnings("unchecked")
@@ -354,7 +354,7 @@ public class JobC extends Thread
                 for (String path : new String[] {"ffmpeg/lib", "ffmpeg/bin", "/usr/lib64", "/usr/lib", "/usr/local/lib64", "/usr/local/lib"})
                 {
                     ffmpegLibDir = runtimeDir.resolve (path);
-                    if (contains (ffmpegLibDir, prefix, "avcodec", suffix)) break;
+                    if (contains (ffmpegLibDir, prefix, "avcodec", suffix) != null) break;
                     ffmpegLibDir = null;
                 }
             }
@@ -363,7 +363,7 @@ public class JobC extends Thread
                 // Relative path is resolved w.r.t. the runtime dir. This makes it easy to
                 // stash ffmpeg as a subdir of runtime.
                 ffmpegLibDir = runtimeDir.resolve (ffmpegString);
-                if (! contains (ffmpegLibDir, prefix, "avcodec", suffix)) ffmpegLibDir = null;
+                if (contains (ffmpegLibDir, prefix, "avcodec", suffix) == null) ffmpegLibDir = null;
             }
             if (ffmpegLibDir != null)
             {
@@ -399,14 +399,14 @@ public class JobC extends Thread
                 for (String path : new String[] {"hdf5/lib", "/usr/lib64", "/usr/lib", "/usr/local/lib64", "/usr/local/lib"})
                 {
                     hdfLibDir = runtimeDir.resolve (path);
-                    if (contains (hdfLibDir, prefix, "hdf", suffix)) break;
+                    if (contains (hdfLibDir, prefix, "hdf", suffix) != null) break;
                     hdfLibDir = null;
                 }
             }
             else
             {
                 hdfLibDir = runtimeDir.resolve (hdfString);
-                if (! contains (hdfLibDir, prefix, "hdf", suffix)) hdfLibDir = null;
+                if (contains (hdfLibDir, prefix, "hdf", suffix) == null) hdfLibDir = null;
             }
             if (hdfLibDir != null)
             {
@@ -473,12 +473,12 @@ public class JobC extends Thread
                         CompilerCL.Factory cl = (CompilerCL.Factory) factory;
                         Path SDKlib = cl.SDKroot.resolve ("Lib").resolve (cl.SDKversion);
                         Path um     = SDKlib.resolve ("um").resolve (cl.arch);
-                        if (Files.exists (um.resolve ("OpenGL32.lib")))
+                        Path glLib  = um.resolve ("OpenGL32.lib");
+                        if (Files.exists (glLib))
                         {
+                            env.objects.put ("glLib", glLib);  // Not used by C backend, but provides visible default in settings.
                             glLibs = new TreeSet<String> ();
                             glLibs.add ("OpenGL32");
-                            glLibs.add ("gdi32");
-                            glLibs.add ("user32");
                         }
                     }
                     else if (factory instanceof CompilerGCC.Factory)  // Unix-like library naming, but relative to compiler installation
@@ -497,12 +497,12 @@ public class JobC extends Thread
                             Path root = gcc.getParent ().getParent ();
                             for (String path : new String[] {"lib", "lib/w32api"})
                             {
-                                if (contains (root.resolve (path), prefix, "opengl32", suffix))
+                                Path glLib = contains (root.resolve (path), prefix, "opengl32", suffix);
+                                if (glLib != null)
                                 {
+                                    env.objects.put ("glLib", glLib);
                                     glLibs = new TreeSet<String> ();
                                     glLibs.add ("opengl32");
-                                    glLibs.add ("gdi32");
-                                    glLibs.add ("user32");
                                     break;
                                 }
                             }
@@ -513,8 +513,10 @@ public class JobC extends Thread
                 {
                     for (String path : new String[] {"/usr/lib64", "/usr/lib", "/usr/local/lib64", "/usr/local/lib"})
                     {
-                        if (Files.exists (runtimeDir.resolve (path).resolve ("libEGL.so")))  // TODO: create lib names in a more intelligent way
+                        Path glLib = runtimeDir.resolve (path).resolve ("libEGL.so");  // TODO: create lib names in a more intelligent way
+                        if (Files.exists (glLib))
                         {
+                            env.objects.put ("glLib", glLib);
                             glLibs = new TreeSet<String> ();
                             glLibs.add ("EGL");
                         }
@@ -526,6 +528,7 @@ public class JobC extends Thread
                 Path glLib = runtimeDir.resolve (glString);
                 if (Files.exists (glLib))
                 {
+                    env.objects.put ("glLib", glLib);
                     glLibs = new TreeSet<String> ();
                     String glLibName = glLib.getFileName ().toString ();
                     if (glLibName.startsWith (prefix)) glLibName = glLibName.substring (suffix.length ());
@@ -535,9 +538,22 @@ public class JobC extends Thread
                 }
             }
 
+            // If main GL lib was found, than add extra libs based on OS.
+            if (glLibs != null)
+            {
+                if (env instanceof Windows)
+                {
+                    glLibs.add ("gdi32");
+                    glLibs.add ("user32");
+                }
+            }
+
             env.objects.put ("glLibs",   glLibs);
             env.objects.put ("glLibDir", glLibDir);
         }
+
+        // Update the settings panel with any newly-discovered resources.
+        SettingsC.instance.rebind (env);
     }
 
     /**
