@@ -257,7 +257,7 @@ public class Device
         // device already implements them or doesn't need them.
         // Parameter and input equations DO have to be processed/understood elsewhere
         MNode metadata = eq.variable.getMetadata ();
-        if (metadata.child ("backend", "xyce", "ignore"     ) != null) return true;
+        if (Backend.getFlag ("xyce", metadata, "ignore"     )        ) return true;
         if (metadata.child ("backend", "xyce", "nodeIndex"  ) != null) return true;
         if (metadata.child ("backend", "xyce", "internalVar") != null) return true;
         return false;

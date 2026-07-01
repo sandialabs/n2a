@@ -425,7 +425,7 @@ public abstract class Backend implements ExtensionPoint
         than to hold a specific Backend object. That's why this is a static function
         and this string is passed.
         @param meta The $meta node that contains the desired key.
-        @param keys Path to the node, starting under ("$meta, "backend", {backendName}).
+        @param keys Path to the node, starting under ("$meta", "backend", {backendName}).
     **/
     public static String get (String backendName, MNode meta, String... keys)
     {
