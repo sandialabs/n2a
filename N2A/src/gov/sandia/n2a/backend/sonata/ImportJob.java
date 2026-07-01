@@ -452,8 +452,9 @@ public class ImportJob
             for (MNode model_template : population)
             {
                 String partName = model_template.key ();
-                MNode  source   = models.child (partName);  // We're only interested in new models that are part of this import.
+                MNode  source   = repo.child (partName);
                 if (source == null) continue;
+                if (source.parent () == models) source.set (AddDoc.generateID (), "$meta", "id");  // Need this to match structure between newly-imported models and ones already in DB.
                 collated.put (partName, new MPartRepo (source, repo));
             }
 
@@ -478,7 +479,21 @@ public class ImportJob
 
                     MNode collated2  = collated.get (key2);
                     if (collated2 == null) continue;
-                    if (! collated2.structureEquals (collated1)) continue;
+                    if (! collated2.structureEquals (collated1))
+                    {
+                        System.out.println ("mismatch: " + key1 + " " + key2);
+
+                        MNode diff1 = new MVolatile ();
+                        diff1.merge        (collated1);
+                        diff1.uniqueNodes (collated2);
+                        System.out.println ("diff1: " + diff1);
+                        MNode diff2 = new MVolatile ();
+                        diff2.merge        (collated2);
+                        diff2.uniqueNodes (collated1);
+                        System.out.println ("diff2: " + diff2);
+
+                        continue;
+                    }
                     MNode structure2 = model_template2.child ("structure");
 
                     // Compare values.
@@ -1347,16 +1362,16 @@ public class ImportJob
 
                                     MNode part = model.childOrCreate (populationName, partName);
                                     MNode meta = part.childOrCreate ("$meta", "backend", "sonata");
-                                    meta.set (populationName,                          "population");
-                                    meta.set (templateName,                            "template");
-                                    part.set ("dir+\"/n2a/" + fileName + "\"",         "instanceFile");
-                                    part.set (connectionA,                             "A");
-                                    part.set (connectionB,                             "B");
-                                    part.set ("Medge(A.$index, B.$index)!=0@$connect", "$p");
-                                    part.set ("matrix(instanceFile, sonata=\"\")",     "Medge");
+                                    meta.set (populationName,                           "population");
+                                    meta.set (templateName,                             "template");
+                                    part.set ("dir+\"/n2a/" + fileName + "\"",          "instanceFile");
+                                    part.set (connectionA,                              "A");
+                                    part.set (connectionB,                              "B");
+                                    part.set ("Medge(A.$index, B.$index)!=0@$connect",  "$p");
+                                    part.set ("matrix(instanceFile, sonataEdges=\"\")", "Medge");
                                     if (multiType)
                                     {
-                                        part.set ("matrix(instanceFile, sonata=\"edge_type_id\")",                      "Medge_type_id");
+                                        part.set ("matrix(instanceFile, sonataEdges=\"edge_type_id\")",                 "Medge_type_id");
                                         part.set ("Medge_type_id(A.$index, B.$index)",                                  "edge_type_id");
                                         part.set ("dir+\"/n2a/" + populationName + " " + templateName + " types.csv\"", "typeFile");
                                     }
@@ -1479,9 +1494,9 @@ public class ImportJob
                         part.set ("$t>=times(index, $index)*1ms",   "fire");
                         break;
                     case "csv":
-                        part.set ("dir+\"/" + input_file + "\"",                     "spikesFile");
-                        part.set ("matrix(spikesFile, sonata=\"" + node_set + "\")", "times");  // TODO: implement SONATA CSV spikes special matrix in ReadMatrix, similar to one in Table.
-                        part.set ("$t>=times(index, $index)*1ms",                    "fire");
+                        part.set ("dir+\"/" + input_file + "\"",        "spikesFile");
+                        part.set ("matrix(spikesFile, sonataSpikes=1)", "times");
+                        part.set ("$t>=times(index, $index)*1ms",       "fire");
                         break;
                     default:
                         throw new AbortRun ("Unrecognized input module: " + module);

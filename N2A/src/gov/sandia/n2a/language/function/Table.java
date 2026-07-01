@@ -7,6 +7,7 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.language.function;
 
 import java.io.BufferedReader;
+import java.io.IOException;
 import java.io.PrintStream;
 import java.math.BigInteger;
 import java.nio.file.Files;
@@ -42,6 +43,7 @@ import gov.sandia.n2a.linear.MatrixDense;
 import gov.sandia.n2a.linear.MatrixSparse;
 import gov.sandia.n2a.plugins.extpoints.Backend;
 import gov.sandia.n2a.plugins.extpoints.Backend.AbortRun;
+import gov.sandia.n2a.util.ParseXSV;
 import io.jhdf.api.Attribute;
 import io.jhdf.api.Dataset;
 import io.jhdf.api.Group;
@@ -178,7 +180,7 @@ public class Table extends Function
 
             // Detect SONATA file.
             Attribute magic = sub.file.getAttribute ("magic");
-            if (magic.getJavaType ().equals (Integer.class)  &&  (Integer) magic.getData () == 2682)
+            if (magic.getJavaType ().equals (Long.class)  &&  (Long) magic.getData () == 2682)  // 32-bit unsigned int (so jHDF returns 64-bit integer)
             {
                 List<io.jhdf.api.Node> parents = new ArrayList<io.jhdf.api.Node> ();
                 io.jhdf.api.Node p = root;
@@ -191,10 +193,10 @@ public class Table extends Function
                 int parentCount = parents.size ();
                 if (parentCount > 2)
                 {
-                    sonataPopulation = (Group) parents.get (2);
                     String groupName = parents.get (1).getName (); // Name of group that contains sonataPopulation.
                     if      (groupName.equals ("spikes")) sonataSpikes = true;
                     else if (groupName.equals ("edges" )) sonataEdges  = true;
+                    if (sonataSpikes  ||  sonataEdges) sonataPopulation = (Group) parents.get (2);
                 }
             }
 
@@ -612,6 +614,11 @@ public class Table extends Function
         }
     }
 
+    public static class SharedRow
+    {
+        long row = -1;
+    }
+
     /**
         Special sparse matrix for SONATA edge lists, backed by HDF data.
         This returns a sparse iterator that simply reads through source and target node IDs serially.
@@ -620,11 +627,11 @@ public class Table extends Function
 
         This class only works when the edge group structure is simple. That is, only one value in edge_group_id,
         and edge_group_index is zero-based contiguous. Anything else requires either more complex lookup
-        or separated tables. Such tables will probably be in CSV rather than HDF.
+        or separated tables. Such tables will probably be in XSV rather than HDF.
     **/
     public static class MatrixSonataEdgesHDF extends Matrix implements AutoCloseable
     {
-        protected Path      filePath;
+        protected Path      filePath;  // of HDF file, so it can be disposed when done.
         protected Dataset   datasetSource;
         protected Dataset   datasetTarget;
         protected Dataset   datasetAttribute;
@@ -635,11 +642,6 @@ public class Table extends Function
         protected int[]     count      = { HolderHDF.chunkSize};
         protected double    emptyValue = 0;
         protected SharedRow cached;
-
-        public static class SharedRow
-        {
-            long row = -1;
-        }
 
         public MatrixSonataEdgesHDF (Path filePath, Group population, Dataset attribute)
         {
@@ -659,7 +661,7 @@ public class Table extends Function
                 cache1 = new HashMap<String,SharedRow> ();
                 simulator.holders.put (key, cache1);
             }
-            String populationName = population.getName ();
+            String populationName = population.getName ();  // Name of the edge collection (distinct from source or target population.
             cached = cache1.get (populationName);
             if (cached == null)
             {
@@ -811,6 +813,119 @@ public class Table extends Function
     }
 
     /**
+        Special sparse matrix for SONATA edge lists, backed by XSV data.
+        See comments on class MatrixSonataEdgesHDF.
+    **/
+    public static class MatrixSonataEdgesXSV extends Matrix implements AutoCloseable
+    {
+        protected Input.HolderXSV holder;
+        protected String          attribute;
+        protected boolean         haveColumns;
+        protected int             colAttribute;
+        protected int             colSource;
+        protected int             colTarget;
+        protected double          emptyValue = 0;
+
+        public MatrixSonataEdgesXSV (String filePath, String attribute) throws IOException
+        {
+            Simulator simulator = Simulator.instance.get ();
+            Object o = simulator.holders.get (filePath);
+            if (o instanceof Input.HolderXSV)
+            {
+                holder = (Input.HolderXSV) o;
+            }
+            else
+            {
+                holder = new Input.HolderXSV (simulator, filePath, false);
+                simulator.holders.put (filePath, holder);
+            }
+        }
+
+        public void close () throws Exception
+        {
+            holder = null;
+        }
+
+        public int rows ()
+        {
+            throw new AbortRun ("MatrixSonataEdgesHDF does not support rows()");
+        }
+
+        public int columns ()
+        {
+            throw new AbortRun ("MatrixSonataEdgesHDF does not support columns()");
+        }
+
+        /**
+            Return attribute associated with the current iterator position.
+        **/
+        public double get (int row, int column)
+        {
+            if (attribute == "") return 1;  // If attribute is absent, we assume boolean matrix. In that case, always return 1, because this function should only be called for existent elements.
+            if (row > holder.currentLine  &&  Double.isNaN (holder.nextLine)) return emptyValue;
+            if (colAttribute < 0) return emptyValue;
+            return holder.currentValues[colAttribute];
+        }
+
+        public void set (int row, int column, double a)
+        {
+            throw new AbortRun ("MatrixSonataEdgesHDF does not support set()");
+        }
+
+        public class IteratorEdge implements IteratorNonzero
+        {
+            int row;
+
+            public boolean hasNext ()
+            {
+                // The first clause below checks whether we have read any rows yet.
+                // The second clause checks if there is any future data.
+                return  holder.currentLine < 0  ||  ! Double.isNaN (holder.nextLine);
+            }
+
+            public Double next ()
+            {
+                try
+                {
+                    holder.getRow (row);
+                }
+                catch (IOException e)
+                {
+                    return null;
+                }
+                if (row > holder.currentLine) return null;
+                row++;
+
+                if (! haveColumns)
+                {
+                    colAttribute = holder.columnMap.get (attribute);
+                    colSource    = holder.columnMap.get ("source_node_id");
+                    colTarget    = holder.columnMap.get ("target_node_id");
+                    if (! attribute.isBlank ()  &&  colAttribute < 0  ||  colSource < 0  ||  colTarget < 0)
+                    {
+                        PrintStream ps = Backend.err.get ();
+                        ps.println ("ERROR: required columns are missing from edges file");  // TODO: save the file name, just for this error message?
+                    }
+                    haveColumns = true;
+                }
+
+                if (colAttribute < 0) return 1.0; // Since we iterate only existing elements, always return true.
+                return holder.currentValues[colAttribute];
+            }
+
+            public int getRow ()
+            {
+                return (int) holder.currentValues[colSource];
+            }
+
+            public int getColumn ()
+            {
+                return (int) holder.currentValues[colTarget];
+            }
+        }
+    }
+
+    /**
         Special sparse matrix for SONATA spike rasters, backed by HDF data.
         Does not bring in all data. Instead, this merely indexes the node_ids.
         We require the datasets (node_ids, timestamps) to be sorted by node_id then by spike time.
@@ -923,7 +1038,7 @@ public class Table extends Function
         public Matrix              strings;   // 1-based indices into string collection. Empty cells and number cells are 0.
         public int                 rows;
         public int                 columns;
-        public Integer             index[];   // Array of row numbers, sorted according to key.
+        public Integer             index[];   // Array of row numbers, sorted according to key (specified elsewhere).
         public Map<String,Integer> columnMap; // from header text to index
     }
 
@@ -968,85 +1083,42 @@ public class Table extends Function
                 ar = 0;
                 ac = 0;
 
-                try (BufferedReader reader = Files.newBufferedReader (path))
+                class ProcessXSV extends ParseXSV
                 {
-                    char    delimiter    = ' ';  // space char, initially
-                    boolean delimiterSet = false;
-                    while (true)
+                    int fillN = 0;
+                    int fillS = 0;
+
+                    public boolean processLine (List<String> parts)
                     {
-                        String line = reader.readLine ();
-                        if (line == null) break;  // indicates end of stream
-                        if (line.length () == 0) continue;
+                        int count = parts.size ();
+                        for (int c = 0; c < count; c++)
+                        {
+                            String temp = parts.get (c);
+                            if (temp.isBlank ()) continue;
 
-                        char chars[] = line.toCharArray ();
-                        if (! delimiterSet)
-                        {
-                            // Scan for first delimiter character that is not inside a quote.
-                            boolean inQuote = false;
-                            for (char c : chars)
+                            // First try to interpret as number.
+                            double value = Scalar.parseDouble (temp, 0);
+                            if (value != 0)
                             {
-                                if (c == '\"')
-                                {
-                                    inQuote = ! inQuote;
-                                    continue;
-                                }
-                                if (inQuote) continue;
-                                if (c == '\t')
-                                {
-                                    delimiter = c;
-                                    break;
-                                }
-                                if (c == ',') delimiter = c;
-                                // space character is lowest precedence
+                                ws.numbers.set (ws.rows, c, value);
+                                fillN++;
                             }
-                            delimiterSet =  delimiter != ' '  ||  ! line.isBlank ();
-                        }
 
-                        // Break line into delimited strings, possibly quoted.
-                        int column = 0;
-                        boolean inQuote = false;
-                        StringBuilder token = new StringBuilder ();
-                        for (int i = 0; i < chars.length; i++)
-                        {
-                            char c = chars[i];
-                            if (c == '\"')
-                            {
-                                if (inQuote  &&  i < chars.length - 1  &&  chars[i+1] == '\"')
-                                {
-                                    token.append (c);
-                                    i++;
-                                    continue;
-                                }
-                                inQuote = ! inQuote;
-                                continue;
-                            }
-                            if (c == delimiter  &&  ! inQuote)
-                            {
-                                String temp = token.toString ();
-                                if (temp.isBlank ())
-                                {
-                                    ws.strings.set (first.rows, column++, 0);
-                                }
-                                else
-                                {
-                                    strings.add (temp);
-                                    int stringIndex = strings.size ();
-                                    ws.strings.set (ws.rows, column++, stringIndex);
-                                }
-                                token.setLength (0);
-                                continue;
-                            }
-                            token.append (c);
-                        }
-                        if (! token.isEmpty ())
-                        {
-                            strings.add (token.toString ());
-                            int s = strings.size ();
-                            ws.strings.set (ws.rows, column++, s);
+                            // Then treat as string.
+                            strings.add (temp);
+                            int stringIndex = strings.size ();
+                            ws.strings.set (ws.rows, c, stringIndex);
+                            fillS++;
                         }
                         ws.rows++;
-                        ws.columns = Math.max (ws.columns, column);
+                        ws.columns = Math.max (ws.columns, columns);
+                        return true;
                     }
+                }
+                ProcessXSV process = new ProcessXSV ();
+                try (BufferedReader reader = Files.newBufferedReader (path))
+                {
+                    process.parse (reader);
                 }
                 catch (Exception e)
                 {
@@ -1055,28 +1127,14 @@ public class Table extends Function
                     e.printStackTrace (err);
                     throw new AbortRun ();
                 }
-                ws.strings = new MatrixDense (ws.strings);
-
-                // Convert strings to numbers
-                int fillN = 0;
-                for (int c = 0; c < first.columns; c++)
-                {
-                    for (int r = 0; r < first.rows; r++)
-                    {
-                        int index = (int) ws.strings.get (r, c);
-                        if (index == 0) continue;
-                        String s = strings.get (index - 1);
-                        double value = Scalar.parseDouble (s, 0);
-                        if (value == 0) continue;
-                        ws.numbers.set (r, c, value);
-                        fillN++;
-                    }
-                }
 
                 // Check fill-in and possibly convert to dense
                 int Nrows = ws.numbers.rows ();
                 int Ncols = ws.numbers.columns ();
-                if ((double) fillN / (Nrows * Ncols) > fillThreshold) ws.numbers = new MatrixDense (ws.numbers);
+                int Srows = ws.strings.rows ();
+                int Scols = ws.strings.columns ();
+                if ((double) process.fillN / (Nrows * Ncols) > fillThreshold) ws.numbers = new MatrixDense (ws.numbers);
+                if ((double) process.fillS / (Srows * Scols) > fillThreshold) ws.strings = new MatrixDense (ws.strings);
 
                 return;
             }
@@ -1538,8 +1596,12 @@ public class Table extends Function
             row    += ar;
             column += ac;
             int index = (int) ws.strings.get (row, column);
-            if (index == 0) return "";
-            return strings.get (index - 1);  // offset index back to zero-based
+            if (index > 0) return strings.get (index - 1);  // offset index back to zero-based
+
+            // No string, so try returning number.
+            double value = ws.numbers.get (row, column);
+            if (value == 0) return "";
+            return Scalar.print (value);
         }
 
         public Matrix getMatrix ()

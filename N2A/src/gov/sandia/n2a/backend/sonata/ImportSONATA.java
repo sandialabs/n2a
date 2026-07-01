@@ -212,7 +212,7 @@ public class ImportSONATA extends ImportModel
                 }
                 else
                 {
-                    temp += "instanceFile, sonata=\"" + key + "\")";
+                    temp += "instanceFile, sonataEdges=\"" + key + "\")";
                 }
                 keyPath[lastIndex] = M;
                 part.set (temp, keyPath);
