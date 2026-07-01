@@ -324,6 +324,7 @@ public class InternalBackendData
 
         public boolean equals (Object that)
         {
+            if (! (that instanceof EventTarget)) return false;  // This test is needed only because the S2 backend mixes disparate object types and compares them.
             return event.equals (((EventTarget) that).event);
         }
     }
