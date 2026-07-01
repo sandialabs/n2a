@@ -36,6 +36,7 @@ import gov.sandia.n2a.ui.settings.SettingsLookAndFeel;
 import gov.sandia.n2a.ui.studies.PanelStudy.SampleTableModel;
 import gov.sandia.n2a.ui.studies.Study;
 
+import java.awt.Color;
 import java.awt.EventQueue;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
@@ -52,6 +53,7 @@ import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 
+import javax.swing.BorderFactory;
 import javax.swing.ImageIcon;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
@@ -122,7 +124,7 @@ public class Main
             // Must be done before any code activates Swing.
             System.setProperty ("sun.java2d.uiScale", "1.0");
 
-            // Show splash screen. (Activates Swing.)
+            // Show splash screen (activates Swing).
             EventQueue.invokeLater (new Runnable ()
             {
                 public void run ()
@@ -130,6 +132,7 @@ public class Main
                     splash = new JWindow ();
                     ImageIcon image = ImageUtil.getImage ("n2a-splash.png");
                     JLabel label = new JLabel (image);
+                    label.setBorder (BorderFactory.createLineBorder (Color.BLACK, 1));
                     splash.getContentPane ().add (label);
                     splash.pack ();
                     splash.setLocationRelativeTo (null);
