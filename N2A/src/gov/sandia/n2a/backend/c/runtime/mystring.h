@@ -52,6 +52,8 @@ inline void append (char * & p, const char * value)
     while (*value) *p++ = *value++;
 }
 
+// Note: The type constraints here ensure that ints smaller than 32-bit get up-converted first.
+// This reduces the number of template instantiations. We also avoid generating a 64-bit version unless specifically required.
 template<class T, typename std::enable_if<std::is_integral<T>::value  &&  std::is_unsigned<T>::value  &&  sizeof (T) >= 4, bool>::type = true>
 inline void append (char * & p, T value)
 {

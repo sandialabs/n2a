@@ -100,12 +100,12 @@ public class EquationSet implements Comparable<EquationSet>
     /**
         Connection terminology:
         connection -- a type of equation set that references into (reads and writes) other equation sets
-        instance variable -- a type of variable that can point to equation-set instances; used to express references
-        alias -- name of the instance variable
+        reference variable -- a type of variable that can point to equation-set instances; used to express references
+        alias -- the name of the reference variable
         endpoint -- the destination equation set; at run-time this can also refer to the specific instance
-        binding -- association between instance variable and endpoint
-        bound -- when an instance variable is assigned a path to an actual equation set
-        unbound -- when an instance variable is tagged as such via the "connect()" notation
+        binding -- association between reference variable and endpoint, expressed as an equation
+        bound -- when a reference variable is assigned a path to an actual equation set
+        unbound -- when a reference variable is tagged as such via the "connect()" notation
     **/
     public static class ConnectionBinding
     {

@@ -4694,7 +4694,7 @@ public class JobC extends Thread
             int eventCount = bed.eventTargets.size ();
             if (eventCount > 0)
             {
-                result.append ("  flags &= ~(" + bed.localFlagType + ") 0" + RendererC.printShift (eventCount) + ";\n");
+                result.append ("  flags &= ~(" + bed.localFlagType + ") 0" + RendererC.printShift (eventCount) + ";  // Clears the first 'eventCount' bits.\n");
             }
 
             // Finalize variables
