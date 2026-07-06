@@ -651,6 +651,8 @@ public abstract class Host
         A general process that presents the Closeable interface.
         This allows a standard Process to be used in a try-with-resources, just
         like a RemoteProcess.
+        TODO: Starting with Java 26, Process implements Closeable, so AnyProcess is no longer needed.
+        RemoteProcess should simply extend Process. OTOH, ProcessBuilder is final, so still need AnyProcessBuilder.
     **/
     public static interface AnyProcess extends Closeable
     {

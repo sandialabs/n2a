@@ -137,13 +137,13 @@ public abstract class Compiler
         b.redirectError  (err);
         try (AnyProcess p = b.start ())
         {
-            p.waitFor ();
+            int exitValue = p.waitFor ();
 
             PrintStream ps = Backend.err.get ();
             String commandString = String.join (" ", command);  // Useful for debugging. The dumped command can be used directly in a terminal to diagnose stalled builds.
             String errString = Host.streamToString (Files.newInputStream (err));
 
-            if (p.exitValue () != 0)
+            if (exitValue != 0)
             {
                 String outString = Host.streamToString (Files.newInputStream (out));
                 synchronized (ps)

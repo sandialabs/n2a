@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -53,6 +53,7 @@ import org.apache.sshd.common.SshConstants;
 import org.apache.sshd.common.channel.exception.SshChannelOpenException;
 import org.apache.sshd.common.session.SessionHeartbeatController.HeartbeatType;
 import org.apache.sshd.common.util.buffer.Buffer;
+import org.apache.sshd.core.CoreModuleProperties;
 
 public class Connection implements Closeable, UserInteraction
 {
@@ -73,6 +74,7 @@ public class Connection implements Closeable, UserInteraction
     public static SshClient client = SshClient.setUpDefaultClient ();  // shared between remote execution system and git wrapper
     static
     {
+        CoreModuleProperties.REQUEST_EXEC_REPLY.set (client, true);  // Ensure that remote command has started before pumping data to its stdin. (We rarely ever pump data to stdin.)
         client.start ();
     }
 
@@ -296,26 +298,13 @@ public class Connection implements Closeable, UserInteraction
                 throw new IOException (e);
             }
 
-            // A redirected stream is of the opposite type from what we would read directly.
-            // IE: stdout (from the perspective of the remote process) must feed into something
-            // on our side. We either read it directly, in which case it is an input stream,
-            // or we redirect it to file, in which case it is an output stream.
-            // Can this get any more confusing?
-            InputStream  stdin  =  fileIn  == null ? null : Files.newInputStream  (fileIn);
-            OutputStream stdout =  fileOut == null ? null : Files.newOutputStream (fileOut);
-            OutputStream stderr =  fileErr == null ? null : Files.newOutputStream (fileErr);
-
             int tries = 0;
             while (true)
             {
+                RemoteProcess process = null;
                 try
                 {
-                    RemoteProcess process = new RemoteProcess (command);
-
-                    // Streams must be configured before connect.
-                    if (stdin  != null) process.channel.setIn  (stdin);
-                    if (stdout != null) process.channel.setOut (stdout);
-                    if (stderr != null) process.channel.setErr (stderr);
+                    process = new RemoteProcess (command);
 
                     if (environment != null)
                     {
@@ -327,23 +316,26 @@ public class Connection implements Closeable, UserInteraction
 
                     process.channel.open ().verify (timeout);  // This actually starts the remote process.
 
-                    if (stdin  == null) process.stdin  = process.channel.getInvertedIn  ();
-                    if (stdout == null) process.stdout = process.channel.getInvertedOut ();
-                    if (stderr == null) process.stderr = process.channel.getInvertedErr ();
+                    // Redirect streams.
+                    if (fileIn  != null) process.stdin  = new Pump (Files.newInputStream (fileIn),     process.channel.getInvertedIn (), true);
+                    if (fileOut != null) process.stdout = new Pump (process.channel.getInvertedOut (), Files.newOutputStream (fileOut),  false);
+                    if (fileErr != null) process.stderr = new Pump (process.channel.getInvertedErr (), Files.newOutputStream (fileErr),  false);
+
                     return process;
                 }
                 catch (IOException e)
                 {
+                    // We only retry if it was an SSH open exception AND we have used the last available permit.
+                    // Otherwise, we clean up and re-throw the exception.
                     if (   ! (e.getCause () instanceof SshChannelOpenException)
                         || channels.availablePermits () > 0
                         || tries >= channelRetries)
                     {
                         // Presumably, if channel failed to open, then it does not count against the channel limit.
-                        // Also, if we throw an exception here, then try-with-resources won't call close() on process.
-                        channels.release ();
-                        if (stdin  != null) stdin .close ();
-                        if (stdout != null) stdout.close ();
-                        if (stderr != null) stderr.close ();
+                        // Also, if we throw an exception here, then try-with-resources in client code will not view
+                        // "process" as opened, so it won't call process.close().
+                        if (process == null) channels.release ();
+                        else                 process.close ();  // Releases permit and closes SSH exec streams.
                         throw e;
                     }
                 }
@@ -360,12 +352,13 @@ public class Connection implements Closeable, UserInteraction
     public class RemoteProcess extends Process implements AnyProcess
     {
         protected ChannelExec channel;
+        protected Integer     result;
 
-        // The following streams are named from the perspective of the remote process.
+        // The following are named from the perspective of the remote process.
         // IE: the stdin of the remote process will receive input from us.
-        protected OutputStream stdin;  // From our perspective, transmitting data, this needs to be an output stream.
-        protected InputStream  stdout;
-        protected InputStream  stderr;
+        protected Pump stdin;
+        protected Pump stdout;
+        protected Pump stderr;
 
         public RemoteProcess (String command) throws IOException
         {
@@ -379,44 +372,41 @@ public class Connection implements Closeable, UserInteraction
             try {channel.close (false).await (timeout);}
             catch (IOException e) {}  // Even if there is an exception, we still release our internal channel count ...
             channels.release ();
+            try {if (stdin != null) stdin.in.close ();}
+            catch (IOException e) {}
+            channel = null;
         }
 
         public OutputStream getOutputStream ()
         {
-            if (stdin == null) stdin = new NullOutputStream ();
-            return stdin;
+            if (stdin == null) return channel.getInvertedIn ();
+            return OutputStream.nullOutputStream ();
         }
 
         public InputStream getInputStream ()
         {
-            if (stdout == null) stdout = new NullInputStream ();
-            return stdout;
+            if (stdout == null) return channel.getInvertedOut ();
+            return InputStream.nullInputStream ();
         }
 
         public InputStream getErrorStream ()
         {
-            if (stderr == null) stderr = new NullInputStream ();
-            return stderr;
+            if (stderr == null) return channel.getInvertedErr ();
+            return InputStream.nullInputStream ();
         }
 
         public int waitFor () throws InterruptedException
         {
-            channel.waitFor
-            (
-                EnumSet.of (ClientChannelEvent.CLOSED,
-                            ClientChannelEvent.EXIT_STATUS,
-                            ClientChannelEvent.EXIT_SIGNAL),
-                0  // wait forever
-            );
-            Integer result = channel.getExitStatus ();
-            if (result == null) return -1;
+            channel.waitFor (EnumSet.of (ClientChannelEvent.CLOSED), 0);  // Wait forever, until server closes channel.
+            result = channel.getExitStatus ();
+            if (result == null) result = -1;
             return result;
         }
 
         public int exitValue () throws IllegalThreadStateException
         {
-            Integer result = channel.getExitStatus ();
-            if (result == null) throw new IllegalThreadStateException ();
+            if (result == null) result = channel.getExitStatus ();
+            if (result == null) throw new IllegalThreadStateException ("Remote process has not yet returned exit code.");
             return result;
         }
 
@@ -454,27 +444,46 @@ public class Connection implements Closeable, UserInteraction
         }
     }
 
-    // The following null streams were copied from ProcessBuilder.
-    // Unfortunately, they are private to that class, so can't be used here.
-
-    public static class NullInputStream extends InputStream
+    public static class Pump extends Thread
     {
-        public int read ()
+        protected InputStream  in;
+        protected OutputStream out;
+        public    boolean      flush;
+
+        public Pump (InputStream in, OutputStream out, boolean flush) throws IOException
         {
-            return -1;
+            super ("SSH Exec Pump");
+
+            this.in    = in;
+            this.out   = out;
+            this.flush = flush;
+
+            setDaemon (true);
+            start ();
         }
 
-        public int available ()
+        public void run ()
         {
-            return 0;
-        }
-    }
+            // The main signal for this thread to stop is that "in" is closed by another thread.
+            try
+            {
+                final int bufferSize = 0x4000;  // 16K
+                byte[] buffer = new byte[bufferSize];
+                int count;
+                while ((count = in.read (buffer, 0, bufferSize)) >= 0)
+                {
+                    out.write (buffer, 0, count);
+                    if (flush) out.flush ();
+                }
+            }
+            catch (Exception e) {}
 
-    public static class NullOutputStream extends OutputStream
-    {
-        public void write (int b) throws IOException
-        {
-            throw new IOException ("Stream closed");
+            try
+            {
+                out.close ();
+                in .close ();  // Very likely already closed by SSH.
+            }
+            catch (Exception e) {}
         }
     }
 

@@ -252,10 +252,11 @@
 
     <dependencies>
         <!-- https://mvnrepository.com/artifact/org.slf4j/slf4j-nop -->
+        <!-- Use slf4j-simple for logging to the JVM's stderr, that is, System.err. Level is INFO. -->
         <dependency>
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-nop</artifactId>
-            <version>2.0.17</version>
+            <version>2.0.18</version>
         </dependency>
 
         <!-- https://mvnrepository.com/artifact/systems.uom/systems-ucum -->
@@ -307,14 +308,14 @@
         <dependency>
             <groupId>org.apache.sshd</groupId>
             <artifactId>sshd-sftp</artifactId>
-            <version>2.16.0</version>
+            <version>2.18.0</version>
         </dependency>
 
         <!-- JOGL references sshd-osgi. We may need this to prevent JOGL from bringing in an old version. -->
         <dependency>
             <groupId>org.apache.sshd</groupId>
             <artifactId>sshd-osgi</artifactId>
-            <version>2.16.0</version>
+            <version>2.18.0</version>
         </dependency>
 
         <!-- https://mvnrepository.com/artifact/org.bouncycastle/bcprov-jdk18on -->
@@ -488,7 +489,7 @@
         <dependency>
             <groupId>io.jhdf</groupId>
             <artifactId>jhdf</artifactId>
-            <version>0.10.0</version>
+            <version>0.11.0</version>
         </dependency>
     </dependencies>
 </project>
