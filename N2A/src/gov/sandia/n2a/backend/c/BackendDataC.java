@@ -123,6 +123,7 @@ public class BackendDataC
     public List<EventSource> eventSources    = new ArrayList<EventSource> ();
     public List<Variable>    eventReferences = new ArrayList<Variable> ();
     public List<Delay>       delays          = new ArrayList<Delay> ();
+    public boolean           hasRingBuffers;  // RingBuffer is a more efficient form of DelayBuffer that requires initialization.
 
     public int    localFlagCount;
     public String localFlagType = ""; // empty string indicates that flags are not required
@@ -531,7 +532,6 @@ public class BackendDataC
             }
         }
 
-        boolean haveRingBuffers = false;
         for (Delay d : delays)
         {
             boolean constDepth   = dt.hasAttribute ("constant")  &&  d.operands[1] instanceof Constant;
@@ -540,7 +540,7 @@ public class BackendDataC
             {
                 d.depth = (int) Math.round (d.operands[1].getDouble () / dt.equations.first ().expression.getDouble ());
                 if (d.depth < 1) d.depth = 1;
-                haveRingBuffers = true;
+                hasRingBuffers = true;
             }
         }
 
@@ -572,7 +572,7 @@ public class BackendDataC
 
         globalFlagCount = 0;
         if (trackInstances  &&  s.connected > 0) clearNew = globalFlagCount++;
-        if (populationCanBeInactive)             inactive = globalFlagCount++;
+        if (populationCanBeInactive)             inactive = globalFlagCount++;  // BackendSpiNNaker2 depends on "inactive" being the last flag to be allocated.
         globalFlagType = determineFlagType (globalFlagCount, "global");
 
         needGlobalDerivative         = ! Euler  &&  globalDerivative.size () > 0;
@@ -604,7 +604,7 @@ public class BackendDataC
         needLocalDerivative         = ! Euler  &&  localDerivative.size () > 0;
         needLocalIntegrate          = localIntegrated.size () > 0;
         needLocalPreserve           = ! Euler  &&  (needLocalIntegrate  ||  localDerivativePreserve.size () > 0  ||  localBufferedExternalWriteDerivative.size () > 0);
-        needLocalClear              = s.accountableConnections != null  ||  refcount  ||  localMembers.size () > 0  ||  haveRingBuffers;
+        needLocalClear              = s.accountableConnections != null  ||  refcount  ||  localMembers.size () > 0  ||  hasRingBuffers;
         needLocalDtor               = needLocalPreserve  ||  needLocalDerivative;
         needLocalCtor               = needLocalDtor  ||  needLocalClear  ||  s.parts.size () > 0;
         needLocalDie                =    canDie
@@ -626,7 +626,11 @@ public class BackendDataC
                                       || connectionCanBeInactive
                                       || canResize;
         needLocalUpdate             = localUpdate.size () > 0;
-        needLocalFinalize           = localBufferedExternal.size () > 0  ||  type != null  ||  canDie;
+        needLocalFinalize           =    eventSources.size () > 0
+                                      || eventTargets.size () > 0
+                                      || localBufferedExternal.size () > 0
+                                      || type != null
+                                      || canDie;
         needLocalUpdateDerivative   = ! Euler  &&  localDerivativeUpdate.size () > 0;
         needLocalFinalizeDerivative = ! Euler  &&  localBufferedExternalDerivative.size () > 0;
 

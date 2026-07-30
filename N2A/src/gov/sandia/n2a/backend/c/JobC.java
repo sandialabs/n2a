@@ -36,7 +36,6 @@ import gov.sandia.n2a.language.function.Delay;
 import gov.sandia.n2a.language.function.Draw;
 import gov.sandia.n2a.language.function.Draw3D;
 import gov.sandia.n2a.language.function.DrawLight;
-import gov.sandia.n2a.language.function.Event;
 import gov.sandia.n2a.language.function.Input;
 import gov.sandia.n2a.language.function.Mfile;
 import gov.sandia.n2a.language.function.Mmatrix;
@@ -1205,12 +1204,6 @@ public class JobC extends Thread
     **/
     public void addImplicitDependencies (EquationSet s)
     {
-        if (fixedPoint)
-        {
-            // Force top-level model to keep $t', so it can retrieve time exponent.
-            Variable dt = s.find (new Variable ("$t", 1));
-            dt.addUser (s);
-        }
         if (s.isSingleton ())
         {
             // Force singleton top-level model to keep $live, to signal when it dies.
@@ -1222,57 +1215,18 @@ public class JobC extends Thread
 
     public void addImplicitDependenciesRecursive (EquationSet s)
     {
-        for (EquationSet p : s.parts)
-        {
-            addImplicitDependenciesRecursive (p);
-        }
+        for (EquationSet p : s.parts) addImplicitDependenciesRecursive (p);
     
-        final Variable dt    = s.find (new Variable ("$t", 1));
-        Variable       index = s.find (new Variable ("$index"));
-        Variable       p     = s.find (new Variable ("$p"));
+        Variable dt    = s.find (new Variable ("$t", 1));
+        Variable index = s.find (new Variable ("$index"));
+        Variable p     = s.find (new Variable ("$p"));
 
-        if (p != null)
-        {
-            if (s.lethalP) p.addDependencyOn (dt);  // $p gets normalized by $t' during probability draw
-            if (p.metadata != null  &&  p.metadata.getDouble ("poll") > 0) p.addDependencyOn (index);  // polling uses $index for hash function
-        }
+        dt.addUser (s);  // dt must always be present in every part. Many places in the C backend depend on this.
 
-        class VisitorDt implements Visitor
-        {
-            public Variable from;
-            public boolean visit (Operator op)
-            {
-                if (op instanceof Input)
-                {
-                    Input i = (Input) op;
-                    if (i.usesTime ()  &&  ! from.hasAttribute ("global")  &&  ! fixedPoint)
-                    {
-                        from.addDependencyOn (dt);  // So that time epsilon can be determined from dt when initializing input.
-                    }
-                }
-                if (op instanceof Event)
-                {
-                    Event e = (Event) op;
-                    if (e.operands.length > 1  &&  e.operands[1].getDouble () > 0)  // constant delay > 0
-                    {
-                        // We depend on $t' to know time exponent.
-                        // This is necessary regardless of whether T=="int", because eventGenerate() handles this in a generic way.
-                        EquationSet root = s.getRoot ();
-                        Variable rootDt = root.find (dt);
-                        rootDt.addUser (root);
-                    }
-                }
-                return true;
-            }
-        }
-        VisitorDt visitor = new VisitorDt ();
-    
+        if (p != null  &&  p.metadata != null  &&  p.metadata.getDouble ("poll") > 0) p.addDependencyOn (index);  // polling uses $index for hash function
+
         for (Variable v : s.variables)
         {
-            visitor.from = v;
-            v.visit (visitor);
-            if (v.derivative != null) v.addDependencyOn (dt);
-
             if (lib  &&  v.getMetadata ().getFlag ("backend", "c", "vector"))
             {
                 EquationSet parent = s;

@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -2784,15 +2784,31 @@ public class EquationSet implements Comparable<EquationSet>
             // Exceptions ($variable gets removed anyway):
             // * $index -- if it was created constant by addSpecials()
             // * $t' -- if it is constant and matches constant $t' in container. This may have been created by findConstants().
-            //   This exception is no longer applied, because the C backend needs to know details about $t' for every part.
-            //   OTOH, the Internal backend has an adequate method for recognizing this case.
-            //   TODO: C backend should add user to $t', then restore code here to remove $t'.
-            if (v.equations.size () > 0  &&  v.name.contains ("$")  &&  ! v.name.equals ("$index"))
+            //   The Internal backend has an adequate method for recognizing this case, so $t' can be removed.
+            //   The C backend needs to know details about $t' for every part, so it always marks a dependency on $t'
+            // * $xyz -- only significant if there are actual users.
+            if (v.equations.size () > 0  &&  v.name.contains ("$")  &&  ! v.name.equals ("$index")  &&  ! v.name.equals ("$xyz"))
             {
-                if (v.name.startsWith ("$")) continue;
-                String[] pieces = v.name.split ("\\.");
-                if (pieces.length == 2  &&  endpointSpecials.contains (pieces[1])) continue;
-                // else fall through ...
+                // Check for constant $t'
+                boolean sharedDt = false;
+                if (container != null  &&  v.name.equals ("$t")  &&  v.order == 1  &&  v.hasAttribute ("constant"))
+                {
+                    Variable cdt = container.find (v);
+                    if (cdt != null  &&  cdt.hasAttribute ("constant"))
+                    {
+                        double  value =   v.equations.first ().expression.getDouble ();
+                        double cvalue = cdt.equations.first ().expression.getDouble ();
+                        sharedDt =  value == cvalue;
+                    }
+                }
+
+                if (! sharedDt)  // Check for general case
+                {
+                    if (v.name.startsWith ("$")) continue;
+                    String[] pieces = v.name.split ("\\.");
+                    if (pieces.length == 2  &&  endpointSpecials.contains (pieces[1])) continue;
+                    // else fall through ...
+                }
             }
 
             // Scan AST for any special output functions.
