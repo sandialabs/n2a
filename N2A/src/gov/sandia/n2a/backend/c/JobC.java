@@ -3249,7 +3249,7 @@ public class JobC extends Thread
             result.append ("void " + ns + "init ()\n");
             result.append ("{\n");
             context.defined.clear ();
-            s.setInit (1);
+            context.phaseInit = true;
 
             // Zero out members
             for (Variable v : bed.globalBufferedExternalWrite)
@@ -3318,7 +3318,7 @@ public class JobC extends Thread
                 }
                 result.append ("  " + SIMULATOR + "connect (this);\n");  // queue to evaluate our connections
             }
-            s.setInit (0);
+            context.phaseInit = false;
             result.append ("}\n");
             result.append ("\n");
         }
@@ -4309,7 +4309,7 @@ public class JobC extends Thread
             result.append ("void " + ns + "init ()\n");
             result.append ("{\n");
             context.defined.clear ();
-            s.setInit (1);
+            context.phaseInit = true;
 
             for (Variable v : bed.localBufferedExternalWrite)
             {
@@ -4435,7 +4435,7 @@ public class JobC extends Thread
                 }
             }
 
-            s.setInit (0);
+            context.phaseInit = false;
             result.append ("}\n");
             result.append ("\n");
         }
@@ -5098,7 +5098,7 @@ public class JobC extends Thread
             result.append ("void " + ns + "getProject (int i, MatrixFixed<" + T + ",3,1> & xyz)\n");
             result.append ("{\n");
             context.defined.clear ();
-            s.setConnect (1);
+            context.phaseConnect = true;
 
             // $project is evaluated similar to $p. The result is not stored.
 
@@ -5162,7 +5162,7 @@ public class JobC extends Thread
             }
             result.append ("  }\n");
 
-            s.setConnect (0);
+            context.phaseConnect = false;
             result.append ("}\n");
         }
 
@@ -5274,7 +5274,7 @@ public class JobC extends Thread
             result.append (T + " " + ns + "getP ()\n");
             result.append ("{\n");
             context.defined.clear ();
-            s.setConnect (1);
+            context.phaseConnect = true;
 
             if (! bed.p.hasAttribute ("constant"))
             {
@@ -5294,7 +5294,7 @@ public class JobC extends Thread
             }
             result.append ("  return " + resolve (bed.p.reference, context, false) + ";\n");
 
-            s.setConnect (0);
+            context.phaseConnect = false;
             result.append ("}\n");
             result.append ("\n");
         }
@@ -5757,8 +5757,8 @@ public class JobC extends Thread
     **/
     public void multiconditional (Variable v, RendererC context, String pad) throws Exception
     {
-        boolean connect = context.part.getConnect ();
-        boolean init    = context.part.getInit ();
+        boolean connect = context.phaseConnect;
+        boolean init    = context.phaseInit;
         boolean isType  = v.name.equals ("$type");
 
         if (v.hasAttribute ("temporary")) context.result.append (pad + type (v) + " " + mangle (v) + ";\n");
@@ -6628,7 +6628,7 @@ public class JobC extends Thread
         // that it always returns false when either $connect or $init are true.
         if (v.name.equals ("$live")  &&  v.container == context.part)
         {
-            if (context.part.getConnect ()  ||  context.part.getInit ()) return "0";
+            if (context.phaseConnect  ||  context.phaseInit) return "0";
         }
 
         if (v.hasAttribute ("constant")  &&  ! lvalue)  // A constant will always be an rvalue, unless it is being loaded into a local variable (special case for $t').
@@ -6703,7 +6703,7 @@ public class JobC extends Thread
         if (name.length () == 0)
         {
             // Write to buffered value, except during init phase.
-            if (lvalue  &&  ! context.part.getInit ()  &&  (vbed.globalBuffered.contains (v)  ||  vbed.localBuffered.contains (v)))
+            if (lvalue  &&  ! context.phaseInit  &&  (vbed.globalBuffered.contains (v)  ||  vbed.localBuffered.contains (v)))
             {
                 name = mangle ("next_", v);
             }

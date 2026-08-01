@@ -2632,9 +2632,48 @@ public class EquationSet implements Comparable<EquationSet>
         }
 
         // Force phase indicators to exist.
-        setConnect (0);
-        setInit    (0);
-        Variable v = new Variable ("$live");  // $live does not require a set method, so create it directly
+
+        Variable v = new Variable ("$connect");
+        if (add (v))
+        {
+            v.unit = AbstractUnit.ONE;
+            v.addAttribute ("constant");
+            EquationEntry e = new EquationEntry (v, "");
+            e.expression = new Constant (0);
+            e.expression.unit = AbstractUnit.ONE;
+            v.add (e);
+        }
+        else
+        {
+            v = find (v);
+            EquationEntry e = v.equations.first ();
+            if (! e.expression.isScalar ())
+            {
+                throw new AbortRun ("Illegal assignment to " + prefix () + ".$connect. Try $p=<expression>@$connect instead.");
+            }
+        }
+
+        v = new Variable ("$init");
+        if (add (v))
+        {
+            v.unit = AbstractUnit.ONE;
+            v.addAttribute ("constant");  // TODO: should really be "initOnly", since it changes value during (at the end of) the init cycle.
+            EquationEntry e = new EquationEntry (v, "");
+            e.expression = new Constant (0);
+            e.expression.unit = AbstractUnit.ONE;
+            v.add (e);
+        }
+        else
+        {
+            v = find (v);
+            EquationEntry e = v.equations.first ();
+            if (! e.expression.isScalar ())
+            {
+                throw new AbortRun ("Illegal assignment to " + prefix () + ".$init.");
+            }
+        }
+
+        v = new Variable ("$live");
         if (add (v))
         {
             v.unit = AbstractUnit.ONE;
@@ -2650,8 +2689,7 @@ public class EquationSet implements Comparable<EquationSet>
             EquationEntry e = v.equations.first ();
             if (! e.expression.isScalar ())
             {
-                Backend.err.get ().println ("Illegal assignment to " + prefix () + ".$live");
-                throw new AbortRun ();
+                throw new AbortRun ("Illegal assignment to " + prefix () + ".$live");
             }
         }
 
@@ -2880,80 +2918,6 @@ public class EquationSet implements Comparable<EquationSet>
                 last = found;
             }
         }
-    }
-
-    /**
-        Change the value of the constant $init in the current equation set.
-        Used to indicate if we are in the init phase or not.
-    **/
-    public void setInit (float value)
-    {
-        Variable query = new Variable ("$init");
-        Variable init  = find (query);
-        if (init == null)
-        {
-            init = query;
-            init.unit = AbstractUnit.ONE;
-            init.addAttribute ("constant");  // TODO: should really be "initOnly", since it changes value during (at the end of) the init cycle.
-            EquationEntry e = new EquationEntry (init, "");
-            e.expression = new Constant (value);
-            e.expression.unit = AbstractUnit.ONE;
-            init.add (e);
-            add (init);
-        }
-        else
-        {
-            EquationEntry e = init.equations.first ();
-            if (! e.expression.isScalar ())
-            {
-                Backend.err.get ().println ("Illegal assignment to " + prefix () + ".$init");
-                throw new AbortRun ();
-            }
-            ((Scalar) ((Constant) e.expression).value).value = value;
-        }
-    }
-
-    public boolean getInit ()
-    {
-        Variable init = find (new Variable ("$init"));
-        if (init == null) return false;
-        EquationEntry e = init.equations.first ();
-        return e.expression.getDouble () != 0;
-    }
-
-    public void setConnect (float value)
-    {
-        Variable query   = new Variable ("$connect");
-        Variable connect = find (query);
-        if (connect == null)
-        {
-            connect = query;
-            connect.unit = AbstractUnit.ONE;
-            connect.addAttribute ("constant");
-            EquationEntry e = new EquationEntry (connect, "");
-            e.expression = new Constant (value);
-            e.expression.unit = AbstractUnit.ONE;
-            connect.add (e);
-            add (connect);
-        }
-        else
-        {
-            EquationEntry e = connect.equations.first ();
-            if (! e.expression.isScalar ())
-            {
-                Backend.err.get ().println ("Illegal assignment to " + prefix () + ".$connect. Try $p=<expression>@$connect instead.");
-                throw new AbortRun ();
-            }
-            ((Scalar) ((Constant) e.expression).value).value = value;
-        }
-    }
-
-    public boolean getConnect ()
-    {
-        Variable connect = find (new Variable ("$connect"));
-        if (connect == null) return false;
-        EquationEntry e = connect.equations.first ();
-        return e.expression.getDouble () != 0;
     }
 
     /**
