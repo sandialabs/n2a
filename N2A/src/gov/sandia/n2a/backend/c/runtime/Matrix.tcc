@@ -924,6 +924,7 @@ max (const MatrixAbstract<T> & A, const T scalar)
     return result;
 }
 
+#ifndef N2A_SPINNAKER
 template<class T>
 std::ostream &
 operator << (std::ostream & stream, const MatrixAbstract<T> & A)
@@ -971,6 +972,7 @@ operator << (std::ostream & stream, const MatrixAbstract<T> & A)
 
     return stream;
 }
+#endif
 
 
 // class MatrixStrided<T> ---------------------------------------------------

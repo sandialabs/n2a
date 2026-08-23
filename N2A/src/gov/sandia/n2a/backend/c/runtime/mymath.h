@@ -93,6 +93,8 @@ namespace n2a
 
 namespace std
 {
+#   ifndef _MSC_VER
+
     inline bool
     isnan (int a)
     {
@@ -104,6 +106,8 @@ namespace std
     {
         return abs (a) == INFINITY;
     }
+
+#   endif
 
     // MSVC chokes on the generic template modFloor() in runtime.h unless this function
     // is defined in std, even though it is not used in fixed-point. We create a poisoned
