@@ -8,6 +8,7 @@ package gov.sandia.n2a.language.function;
 
 import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.PrintStream;
 import java.nio.file.FileSystem;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
@@ -26,6 +27,7 @@ import gov.sandia.n2a.language.type.Text;
 import gov.sandia.n2a.linear.MatrixDense;
 import gov.sandia.n2a.linear.MatrixSparse;
 import gov.sandia.n2a.plugins.extpoints.Backend;
+import gov.sandia.n2a.plugins.extpoints.Backend.AbortRun;
 import gov.sandia.n2a.util.ParseXSV;
 import tech.units.indriya.AbstractUnit;
 
@@ -90,10 +92,10 @@ public class ReadMatrix extends Function
         if (simulator == null) return null;  // absence of simulator indicates analysis phase, so opening files is unnecessary
 
         String fileName = ((Text) operands[0].eval (context)).value;
-        String hdf      = evalKeyword (context, "hdf",    "");
-        String npy      = evalKeyword (context, "npy",    "");
-        String csr      = evalKeyword (context, "csr",    "");
-        String spikes   = evalKeyword (context, "spikes", "");
+        String hdf      = evalKeyword (context, "hdf",          "");
+        String npy      = evalKeyword (context, "npy",          "");
+        String csr      = evalKeyword (context, "csr",          "");
+        String spikes   = evalKeyword (context, "sonataSpikes", "");
 
         boolean isHDF    = ! hdf   .isBlank ();  // User asserts that this is an HDF file, so we take their word for it.
         boolean isNPY    = ! npy   .isBlank ();
@@ -118,6 +120,7 @@ public class ReadMatrix extends Function
         {
             Path path = simulator.jobDir.resolve (fileName);
             String lowerFN = fileName.toLowerCase ();
+            Exception trapped = null;
 
             // For keyword tests (hdf, anchor, npy, csr) we assume that the keyword is only present if the file is really that type.
             if (isHDF)
@@ -128,7 +131,7 @@ public class ReadMatrix extends Function
                     // H gets closed at the end of this block, but A is also a holder and AutoCloseable.
                     // When holders are closed, the HDF resources will finally be released.
                 }
-                catch (Exception e) {}
+                catch (Exception e) {trapped = e;}
             }
             else if (isNPY  ||  isCSR  ||  lowerFN.endsWith (".npz"))
             {
@@ -147,12 +150,61 @@ public class ReadMatrix extends Function
                         A = new MatrixDense (fs);
                     }
                 }
-                catch (IOException e) {}
+                catch (IOException e) {trapped = e;}
             }
             else if (isEdges)  // N2A-generated SONATA edge instance file, in CSV
             {
-                Table.HolderSheet H = new Table.HolderSheet (path);
-                // TODO
+                try
+                {
+                    A = new MatrixSonataEdgesXSV (fileName, path, edges);
+                }
+                catch (IOException e) {trapped = e;}
+            }
+            else if (isSpikes)  // SONATA spike file in CSV. (HDF case is handled above, using special case in Table.HolderHDF.)
+            {
+                // Convert CSV data into sparse spike matrix.
+                class ReadSpikes extends ParseXSV
+                {
+                    MatrixSparse S = new MatrixSparse ();
+
+                    int     colTime       = -1;
+                    int     colPopulation = -1;
+                    int     colID         = -1;
+                    boolean gotColumns    = false;
+                    int     lastID        = -1;
+                    int     eventCount    = 0;
+
+                    public boolean processLine (List<String> parts)
+                    {
+                        if (! gotColumns)
+                        {
+                            colTime       = parts.indexOf ("timestamps");
+                            colPopulation = parts.indexOf ("population");
+                            colID         = parts.indexOf ("node_ids");
+                            gotColumns =  colTime >= 0  &&  colPopulation >= 0  &&  colID >= 0;
+                            if (! gotColumns) return false;
+                        }
+                        //   Extract column data and store in matrix.
+                        if (! parts.get (colPopulation).equals (spikes)) return true;
+                        double time = Double .valueOf (parts.get (colTime));
+                        int    ID   = Integer.valueOf (parts.get (colID));  // Should be long, but MatrixSparse doesn't currently support that.
+                        if (ID != lastID)
+                        {
+                            // We assume that IDs are contiguous in the file, and that timestamps increase monotonically.
+                            lastID = ID;
+                            eventCount = 0;
+                        }
+                        S.set (eventCount++, ID, time);
+                        return true;
+                    }
+                }
+                try (BufferedReader reader = Files.newBufferedReader (path))
+                {
+                    ReadSpikes rs = new ReadSpikes ();
+                    rs.parse (reader);
+                    if (rs.gotColumns) A = rs.S;
+                }
+                catch (Exception e) {trapped = e;}
             }
             else  // Everything else: spreadsheet, CSV, or plain-text
             {
@@ -160,92 +212,38 @@ public class ReadMatrix extends Function
                 Operator anchor = getKeyword ("anchor");
                 boolean isSheet = isCSV  ||  anchor != null;
 
-                boolean isExcel = false;
                 if (! isSheet)  // Probe file for Excel format.
                 {
                     try (BufferedReader reader = Files.newBufferedReader (path))
                     {
                         char magic[] = new char[4];
                         reader.read (magic);
-                        isExcel =  magic[0] == 'P'  &&  magic[1] == 'K'  &&  magic[2] == 3  &&  magic[3] == 4;
+                        isSheet =  magic[0] == 'P'  &&  magic[1] == 'K'  &&  magic[2] == 3  &&  magic[3] == 4;
                     }
                     catch (Exception e) {}
-                    isSheet = isExcel;
                 }
 
                 if (isSheet)
                 {
-                    if (isCSV  &&  getKeywordFlag ("sonataSpikes"))  // SONATA spike file in CSV format
+                    Table.HolderSheet H = new Table.HolderSheet (path);
+                    synchronized (H)
                     {
-                        // Convert CSV data into sparse spike matrix.
-                        // This one is specialized for this format, taking the data as it comes.
-                        // Using a general purpose XSV parser would likely involve holding the data in memory twice, at least temporarily.
-                        class ReadSpikes extends ParseXSV
-                        {
-                            MatrixSparse S = new MatrixSparse ();
-
-                            int     colTime       = -1;
-                            int     colPopulation = -1;
-                            int     colID         = -1;
-                            boolean gotColumns    = false;
-                            int     lastID        = -1;
-                            int     eventCount    = 0;
-
-                            public boolean processLine (List<String> parts)
-                            {
-                                if (! gotColumns)
-                                {
-                                    colTime       = parts.indexOf ("timestamps");
-                                    colPopulation = parts.indexOf ("population");
-                                    colID         = parts.indexOf ("node_ids");
-                                    gotColumns =  colTime >= 0  &&  colPopulation >= 0  &&  colID >= 0;
-                                    if (! gotColumns) return false;
-                                }
-                                //   Extract column data and store in matrix.
-                                if (! parts.get (colPopulation).equals (spikes)) return true;
-                                double time = Double .valueOf (parts.get (colTime));
-                                int    ID   = Integer.valueOf (parts.get (colID));  // Should be long, but MatrixSparse doesn't currently support that.
-                                if (ID != lastID)
-                                {
-                                    // We assume that IDs are contiguous in the file, and that timestamps increase monotonically.
-                                    lastID = ID;
-                                    eventCount = 0;
-                                }
-                                S.set (eventCount++, ID, time);
-                                return true;
-                            }
-                        }
-                        try (BufferedReader reader = Files.newBufferedReader (path))
-                        {
-                            ReadSpikes rs = new ReadSpikes ();
-                            rs.parse (reader);
-                            if (rs.gotColumns) A = rs.S;
-                        }
-                        catch (Exception e)
-                        {
-                            // A remains null, resulting in warning below.
-                        }
-                    }
-                    else
-                    {
-                        Table.HolderSheet H = new Table.HolderSheet (path);
-                        synchronized (H)
-                        {
-                            if (anchor != null) H.parse (anchor.eval (context).toString ());
-                            A = H.getMatrix ();
-                        }
+                        if (anchor != null) H.parse (anchor.eval (context).toString ());
+                        A = H.getMatrix ();
                     }
                 }
 
-                if (A == null  &&  ! isSpikes  &&  ! isEdges) A = Matrix.factory (path);  // Simple matrix file.
+                if (A == null) A = Matrix.factory (path);  // Simple matrix file.
             }
 
             // Done reading. Now what did we get?
             if (A == null)
             {
-                if (! key.equals (warningIO))
+                if (! key.equals (warningIO))  // This filter allows a new message each time a dynamic file name changes.
                 {
-                    Backend.err.get ().println ("WARNING: IO error on matrix(" + key + ")");
+                    PrintStream ps = Backend.err.get ();
+                    ps.println ("WARNING: IO error on matrix(" + key + ")");
+                    if (trapped != null) ps.println ("  " + trapped.getMessage ());
                     warningIO = key;
                 }
             }
@@ -257,8 +255,7 @@ public class ReadMatrix extends Function
         }
         else if (! (A instanceof Matrix))
         {
-            Backend.err.get ().println ("ERROR: Reopening file as a different resource type.");
-            throw new Backend.AbortRun ();
+            throw new AbortRun ("ERROR: Reopening file as a different resource type: " + fileName);
         }
         return (Matrix) A;
     }
@@ -278,5 +275,126 @@ public class ReadMatrix extends Function
     public String toString ()
     {
         return "matrix";
+    }
+
+    /**
+        Special sparse matrix for SONATA edge lists, backed by XSV data.
+        See comments on class Τable.MatrixSonataEdgesHDF.
+    **/
+    public static class MatrixSonataEdgesXSV extends Matrix implements AutoCloseable
+    {
+        protected String          key;
+        protected Input.HolderXSV holder;
+        protected String          attribute;
+        protected boolean         haveColumns;
+        protected int             colAttribute;
+        protected int             colSource;
+        protected int             colTarget;
+        protected double          emptyValue = 0;
+
+        public MatrixSonataEdgesXSV (String key, Path path, String attribute) throws IOException
+        {
+            this.key       = key;
+            this.attribute = attribute;
+
+            Simulator simulator = Simulator.instance.get ();
+            Object Η = simulator.holders.get (key);
+            if (Η == null)
+            {
+                holder = new Input.HolderXSV (simulator, path.toString (), false);
+                simulator.holders.put (key, holder);
+            }
+            else if (Η instanceof Input.HolderXSV)
+            {
+                holder = (Input.HolderXSV) Η;
+            }
+            else
+            {
+                throw new AbortRun ("matrix ERROR: Reopening file as a different resource type: " + key);
+            }
+       }
+
+        public void close () throws Exception
+        {
+            holder = null;  // The base holder will get closed separately during simulator shutdown.
+        }
+
+        public int rows ()
+        {
+            throw new AbortRun ("MatrixSonataEdgesXSV does not support rows()");
+        }
+
+        public int columns ()
+        {
+            throw new AbortRun ("MatrixSonataEdgesXSV does not support columns()");
+        }
+
+        /**
+            Return attribute associated with the current iterator position.
+        **/
+        public double get (int row, int column)
+        {
+            if (attribute == "") return 1;  // If attribute is absent, we assume boolean matrix. In that case, always return 1, because this function should only be called for existent elements.
+            if (row > holder.currentLine  &&  Double.isNaN (holder.nextLine)) return emptyValue;
+            if (colAttribute < 0) return emptyValue;
+            return holder.currentValues[colAttribute];
+        }
+
+        public void set (int row, int column, double a)
+        {
+            throw new AbortRun ("MatrixSonataEdgesXSV does not support set()");
+        }
+
+        public class IteratorEdge implements IteratorNonzero
+        {
+            int row;
+
+            public boolean hasNext ()
+            {
+                // The first clause below checks whether we have read any rows yet.
+                // The second clause checks if there is any future data.
+                return  holder.currentLine < 0  ||  ! Double.isNaN (holder.nextLine);
+            }
+
+            public Double next ()
+            {
+                try
+                {
+                    holder.getRow (row);
+                }
+                catch (IOException e)
+                {
+                    return null;
+                }
+                if (row > holder.currentLine) return null;
+                row++;
+
+                if (! haveColumns)
+                {
+                    colAttribute = holder.columnMap.get (attribute);
+                    colSource    = holder.columnMap.get ("source_node_id");
+                    colTarget    = holder.columnMap.get ("target_node_id");
+                    if (! attribute.isBlank ()  &&  colAttribute < 0  ||  colSource < 0  ||  colTarget < 0)
+                    {
+                        PrintStream ps = Backend.err.get ();
+                        ps.println ("ERROR: required columns are missing from edges file");  // TODO: save the file name, just for this error message?
+                    }
+                    haveColumns = true;
+                }
+
+                if (colAttribute < 0) return 1.0; // Since we iterate only existing elements, always return true.
+                return holder.currentValues[colAttribute];
+            }
+
+            public int getRow ()
+            {
+                return (int) holder.currentValues[colSource];
+            }
+
+            public int getColumn ()
+            {
+                return (int) holder.currentValues[colTarget];
+            }
+        }
     }
 }

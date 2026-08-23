@@ -7,7 +7,6 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.language.function;
 
 import java.io.BufferedReader;
-import java.io.IOException;
 import java.io.PrintStream;
 import java.math.BigInteger;
 import java.nio.file.Files;
@@ -44,7 +43,6 @@ import gov.sandia.n2a.linear.MatrixSparse;
 import gov.sandia.n2a.plugins.extpoints.Backend;
 import gov.sandia.n2a.plugins.extpoints.Backend.AbortRun;
 import gov.sandia.n2a.util.ParseXSV;
-import io.jhdf.api.Attribute;
 import io.jhdf.api.Dataset;
 import io.jhdf.api.Group;
 import tech.units.indriya.AbstractUnit;
@@ -178,38 +176,48 @@ public class Table extends Function
             SubHolderHDF sub = SubHolderHDF.allocate (filePath);
             root = sub.file.getByPath (resource);
 
-            // Detect SONATA file.
-            Attribute magic = sub.file.getAttribute ("magic");
-            if (magic.getJavaType ().equals (Long.class)  &&  (Long) magic.getData () == 2682)  // 32-bit unsigned int (so jHDF returns 64-bit integer)
+            // Detect SONATA data that requires special interpretation.
+            // It should be possible to use the magic string (attribute "magic", a uint32 with value 2682).
+            // However, SONATA files don't consistently set this.
+            // Instead, we assume that "spikes" and "edges" indicate the presence of special SONATA data.
+            // "nodes" does not require special handling.
+            List<io.jhdf.api.Node> parents = new ArrayList<io.jhdf.api.Node> ();
+            io.jhdf.api.Node p = root;
+            parents.add (p);
+            while (p != sub.file)
             {
-                List<io.jhdf.api.Node> parents = new ArrayList<io.jhdf.api.Node> ();
-                io.jhdf.api.Node p = root;
-                parents.add (p);
-                while (p != sub.file)
+                p = p.getParent ();
+                parents.add (0, p);
+            }
+            int parentCount = parents.size ();
+            if (parentCount > 2)
+            {
+                sonataPopulation = (Group) parents.get (2);
+                switch (parents.get (1).getName ()) // Name of group that contains sonataPopulation.
                 {
-                    p = p.getParent ();
-                    parents.add (0, p);
+                    // Do some extra verification.
+                    case "spikes":
+                        sonataSpikes = sonataPopulation.getChild ("node_ids") != null  &&  sonataPopulation.getChild ("timestamps") != null;
+                        break;
+                    case "edges":
+                        sonataEdges = sonataPopulation.getChild ("source_node_id") != null  &&  sonataPopulation.getChild ("target_node_id") != null;
+                        break;
                 }
-                int parentCount = parents.size ();
-                if (parentCount > 2)
-                {
-                    String groupName = parents.get (1).getName (); // Name of group that contains sonataPopulation.
-                    if      (groupName.equals ("spikes")) sonataSpikes = true;
-                    else if (groupName.equals ("edges" )) sonataEdges  = true;
-                    if (sonataSpikes  ||  sonataEdges) sonataPopulation = (Group) parents.get (2);
-                }
+                if (! sonataSpikes  &&  ! sonataEdges) sonataPopulation = null;
             }
 
             if (root.isGroup ())
             {
                 // TODO: handle NWB TimeSeries
                 dims      = new int [2];
+                dimCount  = 1;  // Data columns should be single dimensional.
                 columnMap = new TreeMap<String,Integer> ();
                 headers   = new ArrayList<String> ();
                 for (io.jhdf.api.Node node : (Group) root)
                 {
                     if (node.isGroup ()) continue;
                     int temp[] = ((Dataset) node).getDimensions ();
+                    if (temp.length != 1) throw new AbortRun ("table() expects HDF dataset to be 1-dimensional: " + node.getName ());
                     if (dims[0] < temp[0]) dims[0] = temp[0];
 
                     String columnName = node.getName ();
@@ -229,7 +237,6 @@ public class Table extends Function
                     dims[0] = temp;
                     dims[1] = 1;
                 }
-                if (sonataEdges) dims[1] = 2;  // Edges are 2D sparse.
             }
         }
 
@@ -331,13 +338,13 @@ public class Table extends Function
 
         public double getDouble (double row, double column)
         {
-            if (sonataEdges  ||  sonataSpikes)  throw new AbortRun ("Should access SONATA edges or spikes through matrix()");
+            if (sonataEdges  ||  sonataSpikes) throw new AbortRun ("Should access SONATA edges or spikes through matrix()");
 
             // Bracket the source rows for an interpolated or extrapolated value.
             int r = (int) row;
             int r1 = r + 1;
-            if (r1 < 0) r1 = 0;
-            if (r >= dims[0]) r = dims[0];
+            if (r < 0) r = 0;
+            if (r1 >= dims[0]) r1 = dims[0] - 1;
             if      (r1 < r) r1 = r;
             else if (r > r1) r = r1;
 
@@ -345,8 +352,8 @@ public class Table extends Function
             // Some of this may be meaningless for named columns. We don't worry about that.
             int c = (int) column;
             int c1 = c + 1;
-            if (c1 < 0) c1 = 0;
-            if (c >= dims[1]) c = dims[1];
+            if (c < 0) c = 0;
+            if (c1 >= dims[1]) c1 = dims[1] - 1;
             if      (c1 < c) c1 = c;
             else if (c > c1) c = c1;
 
@@ -371,11 +378,9 @@ public class Table extends Function
                 }
             }
 
-            Class<?> type = columnData.getJavaType ();
-            if (type != double.class  &&  type != float.class) throw new AbortRun ("Need code to handle numeric types other than double or float.");
-            Object block = columnData.getData (offset, count);
-
             double d[][] = new double[2][2];
+            Object block = columnData.getData (offset, count);
+            Class<?> type = columnData.getJavaType ();
             if (type == double.class)
             {
                 if (dimCount == 1  ||  count[1] == 1)  // 1D
@@ -395,7 +400,7 @@ public class Table extends Function
                     }
                 }
             }
-            else  // type == float.class
+            else if (type == float.class)
             {
                 if (dimCount == 1  ||  count[1] == 1)
                 {
@@ -413,6 +418,48 @@ public class Table extends Function
                         }
                     }
                 }
+            }
+            else if (type == int.class)
+            {
+                if (dimCount == 1  ||  count[1] == 1)
+                {
+                    int[] temp = (int[]) block;
+                    for (int i = 0; i < count[0]; i++) d[i][0] = temp[i];
+                }
+                else
+                {
+                    int[][] temp = (int[][]) block;
+                    for (int i = 0; i < count[0]; i++)
+                    {
+                        for (int j = 0; j < count[1]; j++)
+                        {
+                            d[i][j] = temp[i][j];
+                        }
+                    }
+                }
+            }
+            else if (type == BigInteger.class)
+            {
+                if (dimCount == 1  ||  count[1] == 1)
+                {
+                    BigInteger[] temp = (BigInteger[]) block;
+                    for (int i = 0; i < count[0]; i++) d[i][0] = temp[i].doubleValue ();
+                }
+                else
+                {
+                    BigInteger[][] temp = (BigInteger[][]) block;
+                    for (int i = 0; i < count[0]; i++)
+                    {
+                        for (int j = 0; j < count[1]; j++)
+                        {
+                            d[i][j] = temp[i][j].doubleValue ();
+                        }
+                    }
+                }
+            }
+            else
+            {
+                throw new AbortRun ("Need code to handle numeric type: " + type.getSimpleName ());
             }
 
             if (c == c1)
@@ -462,7 +509,7 @@ public class Table extends Function
             if (type == String.class) return ((String[]) result)[0];
             if (type == double.class) return String.valueOf (((double[]) result)[0]);
             if (type == float .class) return String.valueOf (((float []) result)[0]);
-            throw new AbortRun ("Need code to handle numeric types other than double or float.");
+            throw new AbortRun ("getString() needs code for numeric type: " + type.getSimpleName ());
         }
 
         public double get (int row, int column)
@@ -671,12 +718,9 @@ public class Table extends Function
 
             datasetSource    = population.getDatasetByPath ("source_node_id");
             datasetTarget    = population.getDatasetByPath ("target_node_id");
+            rowCount         = datasetTarget.getSize ();  // Should be same as datasetSource.size().
             datasetAttribute = attribute;
-            if (attribute != null)
-            {
-                type     = attribute.getJavaType ();
-                rowCount = attribute.getSize ();
-            }
+            if (attribute != null) type = attribute.getJavaType ();
         }
 
         public void close () throws Exception
@@ -725,6 +769,15 @@ public class Table extends Function
             return chunkAttribute[rr];
         }
 
+        /**
+            Because rows() and columns() are not supported, it's not possible to use the default
+            implementation of this function from Matrix. This version redirects calls to get(r,c).
+        **/
+        public double get (double row, double column, int mode)
+        {
+            return get ((int) row, (int) column);  // Truncate coordinates. Our get(r,c) is mostly consistent with ZEROS mode.
+        }
+
         public void set (int row, int column, double a)
         {
             throw new AbortRun ("MatrixSonataEdgesHDF does not support set()");
@@ -771,8 +824,7 @@ public class Table extends Function
 
             protected void getNext ()
             {
-                row++;
-                cached.row = row;
+                cached.row = ++row;
                 if (row >= rowCount) return;
                 rr = (int) (row - offset[0]);  // row relative to current block of data
                 if (rr < count[0]) return;
@@ -810,118 +862,10 @@ public class Table extends Function
                 return chunkTarget[rr].intValue ();
             }
         }
-    }
 
-    /**
-        Special sparse matrix for SONATA edge lists, backed by XSV data.
-        See comments on class MatrixSonataEdgesHDF.
-    **/
-    public static class MatrixSonataEdgesXSV extends Matrix implements AutoCloseable
-    {
-        protected Input.HolderXSV holder;
-        protected String          attribute;
-        protected boolean         haveColumns;
-        protected int             colAttribute;
-        protected int             colSource;
-        protected int             colTarget;
-        protected double          emptyValue = 0;
-
-        public MatrixSonataEdgesXSV (String filePath, String attribute) throws IOException
+        public IteratorNonzero getIteratorNonzero ()
         {
-            Simulator simulator = Simulator.instance.get ();
-            Object o = simulator.holders.get (filePath);
-            if (o instanceof Input.HolderXSV)
-            {
-                holder = (Input.HolderXSV) o;
-            }
-            else
-            {
-                holder = new Input.HolderXSV (simulator, filePath, false);
-                simulator.holders.put (filePath, holder);
-            }
-        }
-
-        public void close () throws Exception
-        {
-            holder = null;
-        }
-
-        public int rows ()
-        {
-            throw new AbortRun ("MatrixSonataEdgesHDF does not support rows()");
-        }
-
-        public int columns ()
-        {
-            throw new AbortRun ("MatrixSonataEdgesHDF does not support columns()");
-        }
-
-        /**
-            Return attribute associated with the current iterator position.
-        **/
-        public double get (int row, int column)
-        {
-            if (attribute == "") return 1;  // If attribute is absent, we assume boolean matrix. In that case, always return 1, because this function should only be called for existent elements.
-            if (row > holder.currentLine  &&  Double.isNaN (holder.nextLine)) return emptyValue;
-            if (colAttribute < 0) return emptyValue;
-            return holder.currentValues[colAttribute];
-        }
-
-        public void set (int row, int column, double a)
-        {
-            throw new AbortRun ("MatrixSonataEdgesHDF does not support set()");
-        }
-
-        public class IteratorEdge implements IteratorNonzero
-        {
-            int row;
-
-            public boolean hasNext ()
-            {
-                // The first clause below checks whether we have read any rows yet.
-                // The second clause checks if there is any future data.
-                return  holder.currentLine < 0  ||  ! Double.isNaN (holder.nextLine);
-            }
-
-            public Double next ()
-            {
-                try
-                {
-                    holder.getRow (row);
-                }
-                catch (IOException e)
-                {
-                    return null;
-                }
-                if (row > holder.currentLine) return null;
-                row++;
-
-                if (! haveColumns)
-                {
-                    colAttribute = holder.columnMap.get (attribute);
-                    colSource    = holder.columnMap.get ("source_node_id");
-                    colTarget    = holder.columnMap.get ("target_node_id");
-                    if (! attribute.isBlank ()  &&  colAttribute < 0  ||  colSource < 0  ||  colTarget < 0)
-                    {
-                        PrintStream ps = Backend.err.get ();
-                        ps.println ("ERROR: required columns are missing from edges file");  // TODO: save the file name, just for this error message?
-                    }
-                    haveColumns = true;
-                }
-
-                if (colAttribute < 0) return 1.0; // Since we iterate only existing elements, always return true.
-                return holder.currentValues[colAttribute];
-            }
-
-            public int getRow ()
-            {
-                return (int) holder.currentValues[colSource];
-            }
-
-            public int getColumn ()
-            {
-                return (int) holder.currentValues[colTarget];
-            }
+            return new IteratorEdge ();
         }
     }
 
@@ -949,10 +893,11 @@ public class Table extends Function
             List<Long>   listIDs      = new ArrayList<Long> ();
             List<Long>   listPointers = new ArrayList<Long> ();
             Dataset      datasetID    = population.getDatasetByPath ("node_ids");
-            BigInteger[] chunkID      = null;
+            long[]       chunkID      = null;
             long[]       offset       = {0};
             int[]        size         = {0};
             long         lastID       = -1;
+            long         lastPointer  = 0;
             long         count        = datasetID.getSize ();
             for (long i = 0; i < count; i++)
             {
@@ -960,29 +905,31 @@ public class Table extends Function
                 {
                     offset[0] = i;
                     size[0] = (int) Math.min (HolderHDF.chunkSize, count - i);
-                    chunkID = (BigInteger[]) datasetID.getData (offset, size);
+                    chunkID = (long[]) datasetID.getData (offset, size);
                 }
                 int  index = (int) (i - offset[0]);
-                long ID    = chunkID[index].longValue ();
+                long ID    = chunkID[index];
                 if (ID != lastID)
                 {
                     listIDs     .add (ID);
                     listPointers.add (i);
-                    lastID = ID;
+                    lastID      = ID;
+                    rows        = Math.max (rows, (int) (i - lastPointer));
+                    lastPointer = i;
                 }
             }
             lastID++;
             listIDs     .add (lastID);
             listPointers.add (count);
+            rows = Math.max (rows, (int) (count - lastPointer));
             int listSize = listIDs.size ();
 
             columnPointers = new long[listSize];
-            for (int i = 0; i <= listSize; i++) columnPointers[i] = listPointers.get (i);
-            // (lastID - listSize + 1) is the number of skips in listIDs. 
-            if (lastID >= listSize)  // listIDs has skips.
+            for (int i = 0; i < listSize; i++) columnPointers[i] = listPointers.get (i);
+            if (lastID >= listSize)  // listIDs has skips. (lastID + 1 - listSize) is the number of skips.
             {
                 columnIDs = new long[listSize];
-                for (int i = 0; i <= listSize; i++) columnIDs[i] = listIDs.get (i);
+                for (int i = 0; i < listSize; i++) columnIDs[i] = listIDs.get (i);
             }
             // else listIDs is zero-based contiguous. In that case, we can use direct lookup rather than a search.
         }
@@ -1018,7 +965,7 @@ public class Table extends Function
             if (row >= (int) (columnPointers[c+1] - columnPointers[c])) return emptyValue;
             long[] offset = {columnPointers[c] + row};
             int[]  count  = {1};
-            return ((double[]) datasetTime.getData (offset, count))[0];  // This is rather slow. One possibility is to load the entire array of time value into memory.
+            return ((double[]) datasetTime.getData (offset, count))[0];  // This is rather slow. One possibility is to load the entire array of time values into memory.
         }
 
         public void set (int row, int column, double a)
@@ -1096,19 +1043,20 @@ public class Table extends Function
                             String temp = parts.get (c);
                             if (temp.isBlank ()) continue;
 
-                            // First try to interpret as number.
+                            // First try to interpret as number. On failure, store as string.
                             double value = Scalar.parseDouble (temp, 0);
-                            if (value != 0)
+                            if (value == 0)  // Because temp is non-blank, zero indicates not parseable as number.
+                            {
+                                strings.add (temp);
+                                int stringIndex = strings.size ();
+                                ws.strings.set (ws.rows, c, stringIndex);
+                                fillS++;
+                            }
+                            else
                             {
                                 ws.numbers.set (ws.rows, c, value);
                                 fillN++;
                             }
-
-                            // Then treat as string.
-                            strings.add (temp);
-                            int stringIndex = strings.size ();
-                            ws.strings.set (ws.rows, c, stringIndex);
-                            fillS++;
                         }
                         ws.rows++;
                         ws.columns = Math.max (ws.columns, columns);
@@ -1627,15 +1575,15 @@ public class Table extends Function
         {
             Path filePath = simulator.jobDir.resolve (fileName);
             if (hdf.isBlank ()) H = new HolderSheet (filePath);
-            else                H = new HolderHDF   (filePath, hdf.toString ());
+            else                H = new HolderHDF   (filePath, hdf);
             simulator.holders.put (key, H);
+            return (Holder) H;
         }
-        else if (! (H instanceof Holder))
+        else if (H instanceof Holder)
         {
-            Backend.err.get ().println ("ERROR: Reopening file as a different resource type.");
-            throw new AbortRun ();
+            return (Holder) H;
         }
-        return (Holder) H;
+        throw new AbortRun ("ERROR: Reopening file as a different resource type: " + key);
     }
 
     public Type eval (Instance context)
