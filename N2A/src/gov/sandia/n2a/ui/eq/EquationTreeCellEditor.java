@@ -129,6 +129,8 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
         inputMap.put (KeyStroke.getKeyStroke ("shift control Z"), "Redo");
         inputMap.put (KeyStroke.getKeyStroke ("shift meta Z"),    "Redo");
         ActionMap actionMap = oneLineEditor.getActionMap ();
+        Action defaultCaretBackward = actionMap.get ("caret-backward");
+        Action defaultCaretForward  = actionMap.get ("caret-forward");
         actionMap.put ("Undo", new AbstractAction ("Undo")
         {
             public void actionPerformed (ActionEvent evt)
@@ -145,6 +147,26 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
                 catch (CannotRedoException e) {}
             }
         });
+        actionMap.put ("caret-backward", new AbstractAction ("caretBegin")
+        {
+            public void actionPerformed (ActionEvent evt)
+            {
+                int start = oneLineEditor.getSelectionStart ();
+                int end   = oneLineEditor.getSelectionEnd ();
+                if (start == end) defaultCaretBackward.actionPerformed (evt);
+                else              oneLineEditor.setCaretPosition (start);
+            }
+        });
+        actionMap.put ("caret-forward", new AbstractAction ("caretEnd")
+        {
+            public void actionPerformed (ActionEvent evt)
+            {
+                int start = oneLineEditor.getSelectionStart ();
+                int end   = oneLineEditor.getSelectionEnd ();
+                if (start == end) defaultCaretForward.actionPerformed (evt);
+                else              oneLineEditor.setCaretPosition (end);
+            }
+        });
 
         oneLineEditor.addFocusListener (new FocusListener ()
         {
@@ -153,7 +175,7 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
                 // Analyze text of control and set an appropriate selection
                 String text = oneLineEditor.getText ();
                 int equals = text.indexOf ('=');
-                int at     = text.indexOf ('@');
+                int at     = text.indexOf ('@');  // TODO: Not reliable. For example, an '@' could be embedded in a string.
                 if (equals >= 0  &&  equals < text.length () - 1)  // also check for combiner character
                 {
                     if (";:+*/<>".indexOf (text.charAt (equals + 1)) >= 0) equals++;
@@ -162,7 +184,10 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
                 {
                     if (equals >= 0)  // a single-line equation
                     {
-                        oneLineEditor.setCaretPosition (text.length ());
+                        int end = UnitValue.findUnits (text.substring (equals + 1));
+                        if (end == 0) end  = text.length ();
+                        else          end += equals + 1;
+                        oneLineEditor.setCaretPosition (end);
                         oneLineEditor.moveCaretPosition (equals + 1);
                     }
                     else  // A part name
@@ -172,13 +197,18 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
                 }
                 else if (equals > at)  // a multi-conditional line that has "=" in the condition
                 {
+                    int end = UnitValue.findUnits (text.substring (0, at));
+                    if (end == 0) end = at;
                     oneLineEditor.setCaretPosition (0);
-                    oneLineEditor.moveCaretPosition (at);
+                    oneLineEditor.moveCaretPosition (end);
                 }
-                else  // a single-line equation with a condition
+                else  // a single-line equation with a condition, or a multi-conditional line with "=" in the expression
                 {
+                    int end = UnitValue.findUnits (text.substring (equals + 1, at));
+                    if (end == 0) end  = at;
+                    else          end += equals + 1;
                     oneLineEditor.setCaretPosition (equals + 1);
-                    oneLineEditor.moveCaretPosition (at);
+                    oneLineEditor.moveCaretPosition (end);
                 }
             }
 
@@ -407,6 +437,9 @@ public class EquationTreeCellEditor extends AbstractCellEditor implements TreeCe
         oneLineEditor  .updateUI ();
         multiLinePane  .updateUI ();
         multiLineEditor.updateUI ();
+        rangeEditor    .updateUI ();
+        choiceEditor   .updateUI ();
+        flagEditor     .updateUI ();
     }
 
     public Component getTitleEditorComponent (JTree tree, NodePart value, EquationTreeCellRenderer renderer, boolean open)
