@@ -50,14 +50,14 @@ public class PartMapNeuroML extends PartMap
         public void build (String backend, MNode part)
         {
             internalPart = part.key ();
-            String pieces[] = part.get ("$meta", "backend", "lems", "part").split (",");
+            String pieces[] = part.get ("$meta", "backend", backend, "part").split (",");
             for (String n : pieces)
             {
                 if (! n.isBlank ()) externalParts.add (n);
             }
             if (externalParts.isEmpty ()) externalParts.add (internalPart);  // Simply a tagged part, with no name change.
 
-            MNode metadata = part.child ("$meta", "backend", "lems", "children");
+            MNode metadata = part.child ("$meta", "backend", backend, "children");
             if (metadata != null)
             {
                 for (MNode m : metadata)
@@ -80,7 +80,7 @@ public class PartMapNeuroML extends PartMap
 
                 // Add name mapping
                 String key = c.key ();
-                String param = c.get ("$meta", "backend", "lems", "param");
+                String param = c.get ("$meta", "backend", backend, "param");
                 if (! param.isEmpty ())
                 {
                     pieces = param.split (",");
@@ -94,7 +94,7 @@ public class PartMapNeuroML extends PartMap
                 }
 
                 // Add default unit
-                MNode metaDL = c.child ("$meta", "backend", "lems", "DL");
+                MNode metaDL = c.child ("$meta", "backend", backend, "DL");
                 if (metaDL != null)
                 {
                     if (dimensions == null) dimensions = new HashMap<String,String> ();
@@ -299,7 +299,7 @@ public class PartMapNeuroML extends PartMap
     {
         for (MNode c : AppData.docs.childOrEmpty ("models"))
         {
-            if (c.child ("$meta", "backend", "lems", "part") == null) continue;  // Must directly declare a NeuroML part to be included.
+            if (c.child ("$meta", "backend", backend, "part") == null) continue;  // Must directly declare a NeuroML part to be included.
             NameMapNeuroML map = new NameMapNeuroML (new MPartRepo (c));  // Create map using fully-collated part, not just the immediate one.
             outward.put (map.internalPart, map);
             for (String n : map.externalParts) inward.put (n, map);
