@@ -39,7 +39,7 @@ public class SettingsC extends SettingsBackend
     protected MTextField   fieldHDF      = new MTextField (40);
     protected MTextField   fieldJNI      = new MTextField (40);
     protected MTextField   fieldGL       = new MTextField (40);
-    protected MCheckBox    fieldShowCC   = new MCheckBox ("Show source files (.cc)");
+    protected MCheckBox    fieldShowCC   = new MCheckBox ("Show source files (.cc) on Runs tab");
     protected JButton      buttonRebuild = new JButton ("Rebuild Runtime");
     protected JLabel       labelMessages = new JLabel ("JNI support for video I/O:");
     protected TextPaneANSI textMessages;
