@@ -207,28 +207,42 @@ public class EquationSet implements Comparable<EquationSet>
             Operator op1 = A.operandA ();
             Operator op2 = A.operandB ();
             if (op1 == null  ||  op2 == null) return;
-            AccessVariable av1 = endpoint (op1);
-            AccessVariable av2 = endpoint (op2);
+            Operator av1 = endpoint (op1);
+            Operator av2 = endpoint (op2);
             if (av1 == null  ||  av2 == null) return;
 
-            rows = findConnection (av1.reference);
-            cols = findConnection (av2.reference);
+            if (av1 instanceof AccessVariable) rows = findConnection (((AccessVariable) av1).reference);
+            if (av2 instanceof AccessVariable) cols = findConnection (((AccessVariable) av2).reference);
+            if      (rows == null  &&  cols != null) rows = connectionBindings.get (cols.index == 0 ? 1 : 0);
+            else if (rows != null  &&  cols == null) cols = connectionBindings.get (rows.index == 0 ? 1 : 0);
             if (rows == null  ||  cols == null) return;
 
             rowMapping = new Equality (op1, av1);
             rowMapping.solve ();
-            if (rowMapping.lhs != rowMapping.target) rowMapping = null;  // failed to solve for "target"
+            if (rowMapping.lhs != rowMapping.target)  // failed to solve for "target"
+            {
+                rowMapping = null;  // Indicate failure.
+                return;
+            }
+
             colMapping = new Equality (op2, av2);
             colMapping.solve ();
-            if (colMapping.lhs != colMapping.target) colMapping = null;
+            if (colMapping.lhs != colMapping.target)
+            {
+                colMapping = null;
+                return;
+            }
+
             needsMapping =  colMapping.rhs != colMapping.rc  ||  rowMapping.rhs != rowMapping.rc;
         }
 
         /**
             Utility function for identifying connection endpoints implied in ReadMatrix parameters.
         **/
-        public AccessVariable endpoint (Operator op)
+        public Operator endpoint (Operator op)
         {
+            if (op instanceof Constant) return op;
+
             class IndexVisitor implements Visitor
             {
                 public AccessVariable found;
@@ -2105,7 +2119,10 @@ public class EquationSet implements Comparable<EquationSet>
             if (s.connected > 0) continue;
 
             // For similar reasons, if the part contains backend-related metadata, it should remain separate.
-            if (s.metadata.child ("backend", backend) != null) continue;
+            // However, if "part.flatten" is present, it indicates that we can safely flatten, even with backend-specific metadata.
+            // A similar exception is not made for "ignore". In that case, it's better to keep the part separate.
+            MNode bn = s.metadata.child ("backend", backend);
+            if (bn != null  &&  ! bn.getFlag ("part", "flatten")) continue;
 
             // Check if $n==1
             if (! s.isSingleton ()) continue;

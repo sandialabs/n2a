@@ -27,12 +27,23 @@ public class Equality
     public Operator       lhs;
     public Operator       rhs;
 
-    public Equality (Operator op, AccessVariable target)
+    /**
+        @param target Either AccessVariable or a Constant. Constant is supported just to simplify code in Internal backend.
+    **/
+    public Equality (Operator op, Operator target)
     {
-        this.target = target;
-        rc = new Constant (0);
-        lhs = op;
-        rhs = rc;
+        if (target instanceof Constant)
+        {
+            rhs = target;  // Nothing to solve.
+            // Everything else is null. Most other functions do the right thing in this case.
+        }
+        else
+        {
+            this.target = (AccessVariable) target;
+            rc = new Constant (0);
+            lhs = op;
+            rhs = rc;
+        }
     }
 
     /**
@@ -86,6 +97,7 @@ public class Equality
 
     public int getIndex (Instance context, int i)
     {
+        if (rc == null) return (int) rhs.getDouble ();
         ((Scalar) rc.value).value = i;
         return (int) Math.round (((Scalar) rhs.eval (context)).value);
     }
