@@ -117,6 +117,7 @@
             </plugin>
 
             <plugin>
+                <!-- Consider using maven-shade_plugin instead. -->
                 <artifactId>maven-assembly-plugin</artifactId>
                 <version>3.7.1</version>
                 <configuration>
@@ -174,14 +175,14 @@
                 <version>3.1.0</version>
                 <executions>
                     <execution>
-                        <id>move-to-app</id>
+                        <id>copy-to-app</id>
                         <phase>package</phase>
                         <goals>
                             <goal>run</goal>
                         </goals>
                         <configuration>
                             <target>
-                                <move   file="${project.build.directory}/${project.artifactId}-${project.version}.jar"
+                                <copy   file="${project.build.directory}/${project.artifactId}-${project.version}.jar"
                                       tofile="${project.build.directory}/app/N2A.jar"
                                       overwrite="true" />
                             </target>
