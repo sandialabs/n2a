@@ -16,6 +16,7 @@ import java.nio.channels.ByteChannel;
 import java.nio.channels.SeekableByteChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
@@ -23,7 +24,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-
 import javax.measure.Unit;
 
 import gov.sandia.n2a.db.AppData;
@@ -35,6 +35,7 @@ import gov.sandia.n2a.db.MPartRepo;
 import gov.sandia.n2a.language.UnitValue;
 import gov.sandia.n2a.language.function.Output;
 import gov.sandia.n2a.language.function.Table;
+import gov.sandia.n2a.language.type.Scalar;
 import gov.sandia.n2a.db.MVolatile;
 import gov.sandia.n2a.plugins.ExtensionPoint;
 import gov.sandia.n2a.plugins.PluginManager;
@@ -50,18 +51,20 @@ import io.jhdf.exceptions.HdfInvalidPathException;
 
 public class ImportJob
 {
-    public    MNode                        models        = new MVolatile ();
-    protected String                       modelName     = "";
-    public    MNode                        model;                                                   // The main model, inside "models", referenced by "modelName".
-    public    Map<String,Integer>          modelCount    = new HashMap<String,Integer> ();          // Number of model_template uses in "nodeTypes" and "edgeTypes". Used to cull entries from "models" that get eliminated by folding.
-    public    Path                         dir;                                                     // Working directory, where config file is found.
-    public    Path                         n2aDir;                                                  // Directory under working directory where we store our own resources (results of conversion).
-    protected JSON                         json          = new JSON ();                             // We read a lot of JSON files.
-    public    MNode                        config        = new MVolatile ();                        // The top-level config file for this SONATA model.
-    protected Map<String,Map<Long,String>> nodeTypeIndex = new HashMap<String,Map<Long,String>> (); // from (population, node_type_id) to model_template
-    protected Map<String,Map<Long,String>> edgeTypeIndex = new HashMap<String,Map<Long,String>> (); // from (population, edge_type_id) to model_template
-    protected String                       target_simulator;
-    protected Map<String,ImportSONATApart> backends      = new HashMap<String,ImportSONATApart> ();
+    public    MNode                         models        = new MVolatile ();
+    protected String                        modelName     = "";
+    public    MNode                         model;                                                    // The main model, inside "models", referenced by "modelName".
+    public    Map<String,Integer>           modelCount    = new HashMap<String,Integer> ();           // Number of model_template uses in "nodeTypes" and "edgeTypes". Used to cull entries from "models" that get eliminated by folding.
+    public    Path                          dir;                                                      // Working directory, where config file is found.
+    public    Path                          n2aDir;                                                   // Directory under working directory where we store our own resources (results of conversion).
+    protected JSON                          json          = new JSON ();                              // We read a lot of JSON files.
+    public    MNode                         config        = new MVolatile ();                         // The top-level config file for this SONATA model.
+    protected Map<String,Map<Long,String>>  nodeTypeIndex = new HashMap<String,Map<Long,String>> ();  // from (population, node_type_id) to model_template
+    protected Map<String,Map<Long,String>>  edgeTypeIndex = new HashMap<String,Map<Long,String>> ();  // from (population, edge_type_id) to model_template
+    protected Map<String,Map<Long,Integer>> nodeIDmaps    = new HashMap<String,Map<Long,Integer>> (); // from population to map. If map entry exists, then node_type_id needs to be mapped to small integers.
+    protected Map<String,Map<Long,Integer>> edgeIDmaps    = new HashMap<String,Map<Long,Integer>> (); // ditto for edge_type_id
+    protected String                        target_simulator;
+    protected Map<String,ImportSONATApart>  backends      = new HashMap<String,ImportSONATApart> ();
 
     /*
         Structure for nodeTypes and edgeTypes:
@@ -94,7 +97,7 @@ public class ImportJob
         if (index > 0) modelName = modelName.substring (0, index);
         modelName = AddDoc.uniqueName (modelName);
         model = models.childOrCreate (modelName);
-        model.set ("\"" + dir + "\"", "dir");
+        model.set ("\"" + dir.toString ().replace ('\\', '/') + "\"", "dir");
         Files.createDirectories (n2aDir);
 
         // Build table of backends that support SONATA.
@@ -118,11 +121,20 @@ public class ImportJob
         model.set (target_simulator, "$meta", "backend");  // TODO: may need to map some strings.
         target_simulator = backendSchema (target_simulator);
 
+        double duration = config.getDouble ("run", "duration");
+        double dt       = config.getDouble ("run", "dt");
+        if (duration > 0)
+        {
+            model.set (duration + "ms", "duration");
+            model.set ("$t < duration", "$p");
+        }
+        if (dt > 0) model.set (dt + "ms", "$t'");
+
         collectTypes (nodeTypes, nodeTypeIndex, "node", dir.resolve (config.get ("components", "point_neuron_models_dir")));
         collectTypes (edgeTypes, edgeTypeIndex, "edge", dir.resolve (config.get ("components", "synaptic_models_dir")));
         generateModel ();
-        generateTables (nodeTypes);
-        generateTables (edgeTypes);
+        generateTables (nodeTypes, nodeIDmaps, "node");
+        generateTables (edgeTypes, edgeIDmaps, "edge");
 
         for (Entry<String,Integer> e : modelCount.entrySet ())
         {
@@ -477,23 +489,10 @@ public class ImportJob
                     String key2 = model_template2.key ();
                     if (MNode.compare (key2, key1) <= 0) continue;
 
-                    MNode collated2  = collated.get (key2);
+                    MNode collated2 = collated.get (key2);
                     if (collated2 == null) continue;
-                    if (! collated2.structureEquals (collated1))
-                    {
-                        System.out.println ("mismatch: " + key1 + " " + key2);
-
-                        MNode diff1 = new MVolatile ();
-                        diff1.merge        (collated1);
-                        diff1.uniqueNodes (collated2);
-                        System.out.println ("diff1: " + diff1);
-                        MNode diff2 = new MVolatile ();
-                        diff2.merge        (collated2);
-                        diff2.uniqueNodes (collated1);
-                        System.out.println ("diff2: " + diff2);
-
-                        continue;
-                    }
+                    if (! collated2.structureEquals (collated1)) continue;
+                    // The models have same key structure. We simply assume that they only differ in settable parameters. That might not be true.
                     MNode structure2 = model_template2.child ("structure");
 
                     // Compare values.
@@ -583,16 +582,35 @@ public class ImportJob
         // Build populationIndex.
         for (MNode population : collection)
         {
-            Map<Long,String> populationIndex = index.get (population.key ());
+            String            populationName  = population.key ();
+            Map<Long,String>  populationIndex = index.get (populationName);
+            Map<Float,Long>   smallTypeID     = new HashMap<Float,Long> ();    // Used to detect whether conversion to float produces conflicts.
+            boolean           needed          = false;                         // Indicates that mapping is needed to fix conflicts.
+            Map<Long,Integer> IDmap           = new HashMap<Long,Integer> ();  // Mapping to fix conflicts, if needed.
+            int               i               = 1;                             // Current reduced type ID.
+
             for (MNode model_template : population)
             {
                 String templateName = model_template.key ();
                 for (MNode n : model_template.child ("types"))
                 {
                     String key = n.key ();
-                    Long node_type_id = Long.valueOf (key);
-                    populationIndex.put (node_type_id, templateName);
+                    Long type_id = Long.valueOf (key);
+                    populationIndex.put (type_id, templateName);
+                    IDmap.put (type_id, i++);
+
+                    if (needed) continue;
+                    Float reduced  = (float) type_id;  // Converting long to float causes loss of precision.
+                    Long  previous = smallTypeID.get (reduced);
+                    if (previous == null) smallTypeID.put (reduced, type_id);
+                    else if (! previous.equals (type_id)) needed = true;  // Two type IDs reduce to same float, so need to map them.
                 }
+            }
+
+            if (needed)
+            {
+                if (type.equals ("node")) nodeIDmaps.put (populationName, IDmap);
+                else                      edgeIDmaps.put (populationName, IDmap);
             }
         }
     }
@@ -849,7 +867,7 @@ public class ImportJob
 
         for (MNode n : config.childOrEmpty ("networks", "nodes"))
         {
-            String nodes_file = n.get ("nodes_file");
+            String nodes_file = normalizePath (n.get ("nodes_file"));
             Path nodesPath = dir.resolve (nodes_file);
             try (HdfFile file = new HdfFile (nodesPath))
             {
@@ -859,6 +877,8 @@ public class ImportJob
                     if (! node.isGroup ()) continue;  // This should never happen.
                     Group  population     = (Group) node;
                     String populationName = node.getName ();
+
+                    Map<Long,Integer> IDmap = nodeIDmaps.get (populationName);
 
                     // Collect group column lists.
                     HashMap<Integer,GroupAttributes> attributeGroups = GroupAttributes.fromPopulation (population);
@@ -946,6 +966,7 @@ public class ImportJob
                         meta.set ("",                            "simple");
                         meta.set (populationName,                "population");
                         meta.set (templateName,                  "template");
+                        part.set (count,                         "$n");
                         part.set ("dir+\"/" + nodes_file + "\"", "hdfFile");
                         if (attributes != null) part.set ("\"nodes/" + populationName + "/" + attributes.id + "\"", "groupPath");
 
@@ -956,7 +977,7 @@ public class ImportJob
                         {
                             // Handle input population
                             // model_template is probably the empty string ("").
-                            connectInput (part, populationName, count, attributes);
+                            connectInput (part, populationName, attributes);
                         }
                         else
                         {
@@ -968,8 +989,37 @@ public class ImportJob
 
                             if (multiType)  // Parameters are not constant, so we must look them up.
                             {
-                                part.set ("table(hdfFile, $index, 0, hdf=\"nodes/" + populationName + "/node_type_id\")", "node_type_id");
-                                part.set ("dir+\"/n2a/" + populationName + " types.csv\"",                                "typeFile");
+                                part.set ("dir+\"/n2a/" + populationName + " types.csv\"", "typeFile");
+                                if (IDmap == null)
+                                {
+                                    part.set ("table(hdfFile, $index, 0, hdf=\"nodes/" + populationName + "/node_type_id\")", "node_type_id");
+                                }
+                                else
+                                {
+                                    String fileName = partName + " instances.csv";
+                                    part.set ("dir+\"/n2a/" + fileName + "\"",                 "instanceFile");
+                                    part.set ("table(instanceFile, $index, \"node_type_id\")", "node_type_id");
+
+                                    // Dump the simplified instance file.
+                                    try (BufferedWriter writer = Files.newBufferedWriter (n2aDir.resolve (fileName)))
+                                    {
+                                        writer.write ("node_type_id\n");
+                                        Dataset node_type_id = population.getDatasetByPath ("node_type_id");
+                                        long chunk[] = null;
+                                        long offset = 0;
+                                        for (long i = 0; i < count; i++)
+                                        {
+                                            if (i % chunkSize == 0)
+                                            {
+                                                offset = i;
+                                                int size = (int) Math.min (chunkSize, count - i);
+                                                chunk = readLong (node_type_id, offset, size);
+                                            }
+                                            int ir = (int) (i - offset);
+                                            writer.write (IDmap.get (chunk[ir]).toString ());
+                                        }
+                                    }
+                                }
                             }
 
                             List<String> groupColumnNames;  // The columns associated with the group.
@@ -1085,7 +1135,7 @@ public class ImportJob
                                     {
                                         // This assumes only one source of info for input spikes, with populationName as the node_set.
                                         // The specification does not clearly promise this, unless "node_set" is equal to population.
-                                        connectInput (part, populationName, count, attributes);
+                                        connectInput (part, populationName, attributes);
                                     }
                                     else
                                     {
@@ -1107,7 +1157,8 @@ public class ImportJob
                                 boolean first = true;
                                 if (multiType)
                                 {
-                                    iw.writer.write (Long.toString (node_type_id));
+                                    if (IDmap == null) iw.writer.write (Long.toString (node_type_id));
+                                    else               iw.writer.write (IDmap.get (node_type_id).toString ());
                                     first = false;
                                 }
                                 if (attributes != null)
@@ -1131,6 +1182,15 @@ public class ImportJob
                                 indexBuffer.rewind ();
                                 indexChannel.write (indexBuffer);
                             }
+
+                            // Save $n for each sub-population.
+                            for (Entry<String,InstanceWriter> e : writers.entrySet ())
+                            {
+                                String         partName = e.getKey ();
+                                InstanceWriter iw       = e.getValue ();
+                                MNode part = model.child (populationName, partName);
+                                part.set (iw.count, "$n");
+                            }
                         }
                         finally
                         {
@@ -1144,7 +1204,7 @@ public class ImportJob
 
         for (MNode e : config.childOrEmpty ("networks", "edges"))
         {
-            String edges_file = e.get ("edges_file");
+            String edges_file = normalizePath (e.get ("edges_file"));
             Path edgesPath = dir.resolve (edges_file);
             try (HdfFile file = new HdfFile (edgesPath))
             {
@@ -1154,6 +1214,8 @@ public class ImportJob
                     if (! edge.isGroup ()) continue;  // This should never happen.
                     Group  population     = (Group) edge;
                     String populationName = edge.getName ();
+
+                    Map<Long,Integer> IDmap = edgeIDmaps.get (populationName);
 
                     HashMap<Integer,GroupAttributes> groupAttributes = GroupAttributes.fromPopulation (population);
                     boolean multiGroup = groupAttributes.size () > 1;
@@ -1204,9 +1266,46 @@ public class ImportJob
                         part.set ("matrix(hdfFile, hdf=\"edges/" + populationName + "\")", "Medge");
                         if (multiType)
                         {
-                            part.set ("matrix(hdfFile, hdf=\"edges/" + populationName + "/edge_type_id\")", "Medge_type_id");
-                            part.set ("Medge_type_id(A.$index, B.$index)",                                  "edge_type_id");
-                            part.set ("dir+\"/n2a/" + populationName + " types.csv\"",                      "typeFile");
+                            part.set ("dir+\"/n2a/" + populationName + " types.csv\"", "typeFile");
+                            part.set ("Medge_type_id(A.$index, B.$index)",             "edge_type_id");
+                            if (IDmap == null)
+                            {
+                                part.set ("matrix(hdfFile, hdf=\"edges/" + populationName + "/edge_type_id\")", "Medge_type_id");
+                            }
+                            else
+                            {
+                                String fileName = partName + " instances.sparse";
+                                part.set ("dir+\"/n2a/" + fileName + "\"", "instanceFile");
+                                part.set ("matrix(instanceFile)",          "Medge_type_id");
+
+                                // Write a sparse matrix file with the mapped IDs.
+                                try (BufferedWriter writer = Files.newBufferedWriter (n2aDir.resolve (fileName)))
+                                {
+                                    writer.write ("sparse\n");
+                                    Dataset datasetType = population.getDatasetByPath ("edge_type_id");
+                                    long chunkType  [] = null;
+                                    long chunkSource[] = null;
+                                    long chunkTarget[] = null;
+                                    long offset = 0;
+                                    for (long i = 0; i < count; i++)
+                                    {
+                                        if (i % chunkSize == 0)
+                                        {
+                                            offset = i;
+                                            int size = (int) Math.min (chunkSize, count - i);
+                                            chunkType   = readLong (datasetType,   offset, size);
+                                            chunkSource = readLong (datasetSource, offset, size);
+                                            chunkTarget = readLong (datasetTarget, offset, size);
+                                        }
+                                        int ir = (int) (i - offset);  // relative index
+                                        long edge_type_id   = chunkType  [ir];
+                                        long source_node_id = chunkSource[ir];
+                                        long target_node_id = chunkTarget[ir];
+
+                                        writer.write (source_node_id + "," + target_node_id + "," + IDmap.get (edge_type_id) + "\n");
+                                    }
+                                }
+                            }
                         }
 
                         List<String> groupColumnNames;
@@ -1269,7 +1368,6 @@ public class ImportJob
                             long chunkSource[] = null;
                             long chunkTarget[] = null;
                             long offset = 0;
-                            count = datasetType.getSize ();
                             for (long i = 0; i < count; i++)
                             {
                                 if (i % chunkSize == 0)
@@ -1392,7 +1490,12 @@ public class ImportJob
 
                                 // Add all columns to part info file.
                                 writer.write (Long.toString (indexA) + " " + Long.toString (indexB));
-                                if (multiType) writer.write (" " + Long.toString (edge_type_id));
+                                if (multiType)
+                                {
+                                    if (IDmap == null) writer.write (" " + Long.toString (edge_type_id));
+                                    else               writer.write (" " + IDmap.get (edge_type_id).toString ());
+                                    
+                                }
                                 if (attributes != null)
                                 {
                                     attributes.read (edge_group_index);
@@ -1450,10 +1553,9 @@ public class ImportJob
         @param count Size of population.
         @param groupAttributes Non-null if there are group attributes associated with this population.
     **/
-    public void connectInput (MNode part, String node_set, long count, GroupAttributes groupAttributes)
+    public void connectInput (MNode part, String node_set, GroupAttributes groupAttributes)
     {
         part.set ("Spike Array", "$inherit");
-        part.set (count,         "$n");
 
         // Attempt to determine a concrete input file and set it up as input.
         MNode inputs = config.childOrEmpty ("inputs");
@@ -1469,6 +1571,7 @@ public class ImportJob
         String input_type = input.get ("input_type");
         String module     = input.get ("module");
         String input_file = input.get ("input_file");
+        input_file = normalizePath (input_file);
         switch (input_type)
         {
             case "spikes":
@@ -1483,20 +1586,20 @@ public class ImportJob
     
                 // S2 TODO: special optimization to set up host-side spike sender?
                 //   alt: sparse representation that can be buffered in DRAM.
-    
+
                 switch (module)
                 {
                     case "h5":
                     case "sonata":
-                        part.set ("dir+\"/" + input_file + "\"",    "hdfFile");
-                        part.set ("\"spikes/" + node_set + "\"",    "inputPath");
-                        part.set ("matrix(hdfFile, hdf=inputPath)", "times");
-                        part.set ("$t>=times(index, $index)*1ms",   "fire");
+                        part.set ("dir+\"/" + input_file + "\"",       "spikesFile");
+                        part.set ("\"spikes/" + node_set + "\"",       "inputPath");
+                        part.set ("matrix(spikesFile, hdf=inputPath)", "times");
+                        part.set ("$t>=times(index, $index)*1ms",      "fire");
                         break;
                     case "csv":
-                        part.set ("dir+\"/" + input_file + "\"",        "spikesFile");
-                        part.set ("matrix(spikesFile, sonataSpikes=1)", "times");
-                        part.set ("$t>=times(index, $index)*1ms",       "fire");
+                        part.set ("dir+\"/" + input_file + "\"",                           "spikesFile");
+                        part.set ("matrix(spikesFile, sonataSpikes=\"" + node_set + "\")", "times");
+                        part.set ("$t>=times(index, $index)*1ms",                          "fire");
                         break;
                     default:
                         throw new AbortRun ("Unrecognized input module: " + module);
@@ -1520,19 +1623,20 @@ public class ImportJob
             }
             else
             {
-                part.set ("dir+\"/n2a/" + part.key () + " instances.csv\"", "instanceFile");
                 part.set ("table(instanceFile, $index, \"" + name + "\")", name);
             }
         }
         ImportSONATA.processXYZ (part);
     }
 
-    public void generateTables (MNode collection) throws IOException
+    public void generateTables (MNode collection, Map<String,Map<Long,Integer>> IDmaps, String type) throws IOException
     {
+        String type_id = type + "_type_id";
         for (MNode population : collection)
         {
             String populationName = population.key ();
             boolean multiTemplate = population.size () > 1;
+            Map<Long,Integer> IDmap = IDmaps.get (populationName);
             for (MNode model_template : population)
             {
                 // TODO: this code assumes that node population names and edge population names never overlap. The SONATA guide does not promise this.
@@ -1579,7 +1683,13 @@ public class ImportJob
                                     if (! first) writer.write (" ");
                                     first = false;
                                     String keyPath[] = node.keyPath (partAttributes);
-                                    writer.write (Output.Holder.escape (t.get (keyPath)));
+                                    String value = t.get (keyPath);
+                                    if (keyPath.length == 1  &&  keyPath[0].equals (type_id))
+                                    {
+                                        if (IDmap == null) value = Scalar.print (Float.valueOf (value));  // Reduce ID to float, so that indices are stored in lost precision. This allows match to values stored in float in model.
+                                        else               value = IDmap.get (Long.valueOf (value)).toString ();  // Reducing to float will cause conflicts, so remap instead.
+                                    }
+                                    writer.write (Output.Holder.escape (value));
                                 }
                                 catch (IOException e) {}
                                 return false;
@@ -1590,5 +1700,11 @@ public class ImportJob
                 }
             }
         }
+    }
+
+    public static String normalizePath (String pathString)
+    {
+        Path path = Paths.get (pathString);
+        return path.normalize ().toString ().replace ('\\', '/');
     }
 }

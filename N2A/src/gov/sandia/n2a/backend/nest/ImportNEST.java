@@ -103,19 +103,33 @@ public class ImportNEST extends ImportModel implements ImportSONATApart
             String Bpopulation    = Bpart.get ("$meta", "backend", "sonata", "population");
             String Btemplate      = Bpart.get ("$meta", "backend", "sonata", "template");
             MNode Battributes = job.nodeTypes.child (Bpopulation, Btemplate, "structure");
-            for (MNode b : BbasePart.childOrEmpty ("$meta", "backend", "nest", "ports", synapseClass))  // Iterate through the attributes associated with this port.
+            for (MNode a : BbasePart.childOrEmpty ("$meta", "backend", "nest", "ports", synapseClass))  // Iterate through the attributes associated with this port.
             {
-                String Bkey       = b.key ();
-                String BkeyPath[] = Bkey.split ("\\.");
-                MNode  Battribute = Battributes.child (BkeyPath);
-                if (Battribute == null) continue;  // Does B have data for this attribute?
+                String key          = a.key ();
+                String keyPath[]    = key.split ("\\.");
+                MNode  attribute    = Battributes.child (keyPath);
+                String internalName = map.importName (key);
 
-                String externalName = b.getOrDefault (Bkey);  // Translate from namespace of neuron to namespace of synapse. This is still an external name. It allows for NEST parts to name their synapse parameters inconsistently.
-                String internalName = map.importName (externalName);
-                Bkey = "\"" + Bkey;
-                if (receptor_type) Bkey += ".\"+(receptor_type-1)";
-                else               Bkey += "\"";
-                applyAttribute (Battribute, Bkey, internalName, "node_type_id", true, basePart, part);
+                if (attribute != null)  // Data is specified for this attribute.
+                {
+                    key = "\"" + key;
+                    if (receptor_type) key += ".\"+(receptor_type-1)";
+                    else               key += "\"";
+                    applyAttribute (attribute, key, internalName, "node_type_id", true, basePart, part);
+                    continue;
+                }
+
+                // Check if part metadata explicitly sets this value.
+                MNode baseMeta = basePart.childOrEmpty (internalName, "$meta", "backend", "nest");
+                String value = a.get ();
+                if (value.isBlank ()) value = baseMeta.get ("default");  // No default in port spec, so check in base of synapse (basePart).
+                if (! value.isBlank ())  // A default was specified somewhere.
+                {
+                    // See applyAttribute() for handling of units on constants.
+                    UnitValue uv = new UnitValue (value);
+                    if (uv.unit == null) value += UnitValue.safeUnit (baseMeta.get ("unit"));
+                    part.set (value, internalName);  // Apply value to synapse part.
+                }
             }
 
             // Instance values
