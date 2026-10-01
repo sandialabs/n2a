@@ -241,7 +241,7 @@ public class ImportJob
         for (MNode n : config.childOrEmpty ("networks", type + "s"))
         {
             Path typesPath = dir.resolve (n.get (type + "_types_file"));
-            Table.Holder H = new Table.HolderSheet (typesPath);
+            Table.Holder H = new Table.HolderSheet (typesPath.toString ());
 
             int index_population      = H.getColumnIndex ("population");
             int index_type_id         = H.getColumnIndex (type + "_type_id");
@@ -419,10 +419,28 @@ public class ImportJob
                 // Step 2 -- Find attributes that are constant.
                 structure.visit (new Visitor ()
                 {
+                    List<String> alwaysSave;
                     public boolean visit (MNode node)
                     {
                         if (node == structure) return true;  // Skip root.
                         if (! node.data ()) return true;  // Skip interior nodes. (When importing JSON, interior nodes have undefined value.)
+
+                        if (alwaysSave == null)
+                        {
+                            String schema = model_template.get ("schema");
+                            ImportSONATApart importer = backends.get (schema);
+                            if (importer != null) alwaysSave = importer.alwaysSave (ImportJob.this, model_template.key ());
+                            if (alwaysSave == null) alwaysSave = new ArrayList<String> ();
+                        }
+                        String keypathString = node.keyPathString (structure);
+                        for (String prefix : alwaysSave)
+                        {
+                            if (keypathString.startsWith (prefix))
+                            {
+                                node.set (null);  // Set value to undefined. This prevents it from being eliminated, even if constant.
+                                return true;
+                            }
+                        }
 
                         String keypath[] = node.keyPath (structure);
                         String constant  = node.get ();
@@ -1281,7 +1299,7 @@ public class ImportJob
                                 // Write a sparse matrix file with the mapped IDs.
                                 try (BufferedWriter writer = Files.newBufferedWriter (n2aDir.resolve (fileName)))
                                 {
-                                    writer.write ("sparse\n");
+                                    writer.write ("Sparse\n");
                                     Dataset datasetType = population.getDatasetByPath ("edge_type_id");
                                     long chunkType  [] = null;
                                     long chunkSource[] = null;

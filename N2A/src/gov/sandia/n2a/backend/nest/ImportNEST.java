@@ -7,6 +7,7 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.backend.nest;
 
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -15,6 +16,7 @@ import java.util.Set;
 
 import gov.sandia.n2a.backend.PartMap;
 import gov.sandia.n2a.backend.PartMap.NameMap;
+import gov.sandia.n2a.backend.sonata.ImportJob;
 import gov.sandia.n2a.backend.sonata.ImportSONATA;
 import gov.sandia.n2a.backend.sonata.ImportSONATApart;
 import gov.sandia.n2a.db.AppData;
@@ -50,6 +52,21 @@ public class ImportNEST extends ImportModel implements ImportSONATApart
     public boolean accept (Path source)
     {
         return false;
+    }
+
+    @Override
+    public List<String> alwaysSave (ImportJob job, String model_template)
+    {
+        if (PluginNEST.partMap == null) PluginNEST.partMap = new PartMap ("nest");
+        String neuronClass = PluginNEST.partMap.importName (model_template);
+
+        List<String> result = new ArrayList<String> ();
+        MNode neuronPart = new MPartRepo (AppData.docs.childOrEmpty ("models", neuronClass));
+        for (MNode port : neuronPart.childOrEmpty ("$meta", "backend", "nest", "ports"))
+        {
+            for (MNode param : port) result.add (param.key ());
+        }
+        return result;
     }
 
     @Override
@@ -180,10 +197,7 @@ public class ImportNEST extends ImportModel implements ImportSONATApart
             Set<String> portParams = new HashSet<String> ();
             for (MNode port : basePart.childOrEmpty ("$meta", "backend", "nest", "ports"))
             {
-                for (MNode name : port)
-                {
-                    portParams.add (name.key ());
-                }
+                for (MNode param : port) portParams.add (param.key ());
             }
 
             // Apply parameter table and constants
@@ -208,7 +222,7 @@ public class ImportNEST extends ImportModel implements ImportSONATApart
 
                     String columnName = keyPath;
                     if (isCollection) keyPath = node.parent ().keyPathString (partAttributes);  // Remove last path element (the index). Usually, the remaining path will be a single element.
-                    if (portParams.contains (keyPath)) return false;  // Skip synapse parameters.
+                    if (portParams.contains (keyPath)) return false;  // Skip synapse parameters. They will be used indirectly by synapse parts.
 
                     MNode   p = part;
                     NameMap m = map;

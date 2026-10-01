@@ -29,6 +29,19 @@ public interface ImportSONATApart
     }
 
     /**
+        Determine a list of attributes that should always be stored in types file, even if
+        they are constant across types.
+        @param model_template The external part name, without schema prefix. This name may be
+        results of a call to prepare(), so lookup should include both existing parts in AppData
+        and new parts pending in job.
+        @return The strings are key-path prefixes. This allows us to specify collections.
+    **/
+    public default List<String> alwaysSave (ImportJob job, String model_template)
+    {
+        return null;
+    }
+
+    /**
         Gives the path from a parameter to metadata specifying units that this backend requires.
         If this backend does not have required units, then the return value is null.
         {"$meta", "backend"} is assumed, so these should not be included in the path.
