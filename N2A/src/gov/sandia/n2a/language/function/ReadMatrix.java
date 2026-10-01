@@ -70,6 +70,13 @@ public class ReadMatrix extends Function
 
     public void determineExponent (ExponentContext context)
     {
+        // Our operand and all keywords are strings. However, they may be calculated at least in part from numbers.
+        operands[0].determineExponent (context);
+        if (keywords != null)
+        {
+            for (Operator k : keywords.values ()) k.determineExponent (context);
+        }
+
         int centerNew   = MSB / 2;
         int exponentNew = getExponentHint (0) - centerNew;
         updateExponent (context, exponentNew, centerNew);
@@ -78,7 +85,21 @@ public class ReadMatrix extends Function
     public void determineExponentNext ()
     {
         exponent = exponentNext;  // Conversion done while reading.
-        // All our operands are strings, so no point in passing the exponent down.
+
+        // File name, which is string, possibly calculated.
+        Operator op0 = operands[0];
+        op0.exponentNext = op0.exponent;
+        op0.determineExponentNext ();
+
+        if (keywords != null)
+        {
+            // All keywords are strings, possibly calculated.
+            for (Operator k : keywords.values ())
+            {
+                k.exponentNext = k.exponent;
+                k.determineExponentNext ();
+            }
+        }
     }
 
     public void determineUnit (boolean fatal) throws Exception
@@ -108,6 +129,9 @@ public class ReadMatrix extends Function
         boolean  isEdges  = sonataOp != null;
         String   edges    = isEdges ? sonataOp.eval (context).toString () : "";
 
+        if (hdf.startsWith ("/")) hdf = hdf.substring (1);                     // Never start with a slash.
+        if (hdf.endsWith   ("/")) hdf = hdf.substring (0, hdf.length () - 1);  // Never end with a slash.
+
         String key = fileName;
         if      (isHDF)    key += "|" + hdf;  // Because multiple holders can share same HDF file.
         else if (isNPY)    key += "|" + npy;
@@ -125,11 +149,11 @@ public class ReadMatrix extends Function
             // For keyword tests (hdf, anchor, npy, csr) we assume that the keyword is only present if the file is really that type.
             if (isHDF)
             {
-                try (Table.HolderHDF H = new Table.HolderHDF (path, hdf))
+                try (Table.HolderHDF H = new Table.HolderHDF (fileName, hdf))
                 {
                     A = H.getMatrix ();
-                    // H gets closed at the end of this block, but A is also a holder and AutoCloseable.
-                    // When holders are closed, the HDF resources will finally be released.
+                    // H.close() gets called at the end of this block, but A also has a claim on the underlying HDF.
+                    // A is a closable holder, so when holders are closed, the HDF resources will finally be released.
                 }
                 catch (Exception e) {trapped = e;}
             }
@@ -156,7 +180,7 @@ public class ReadMatrix extends Function
             {
                 try
                 {
-                    A = new MatrixSonataEdgesXSV (fileName, path, edges);
+                    A = new MatrixSonataEdgesXSV (fileName, edges);
                 }
                 catch (IOException e) {trapped = e;}
             }
@@ -225,7 +249,7 @@ public class ReadMatrix extends Function
 
                 if (isSheet)
                 {
-                    Table.HolderSheet H = new Table.HolderSheet (path);
+                    Table.HolderSheet H = new Table.HolderSheet (fileName);
                     synchronized (H)
                     {
                         if (anchor != null) H.parse (anchor.eval (context).toString ());
@@ -278,45 +302,74 @@ public class ReadMatrix extends Function
     }
 
     /**
+        Selects a keyword that indicates type.
+        If no such keyword was specified, returns empty string ("").
+    **/
+    public String resourceKey ()
+    {
+        // These are in precedence order.
+        if (keywords == null)                      return "";
+        if (keywords.containsKey ("hdf"))          return "hdf";
+        if (keywords.containsKey ("anchor"))       return "anchor";
+        if (keywords.containsKey ("npy"))          return "npy";
+        if (keywords.containsKey ("csr"))          return "csr";
+        if (keywords.containsKey ("csc"))          return "csc";
+        if (keywords.containsKey ("sonataEdges"))  return "sonataEdges";
+        if (keywords.containsKey ("sonataSpikes")) return "sonataSpikes";
+        return "";
+    }
+
+    /**
         Special sparse matrix for SONATA edge lists, backed by XSV data.
-        See comments on class Τable.MatrixSonataEdgesHDF.
+        Similar to Τable.MatrixSonataEdgesHDF, there can be several different matrices
+        wrapping the various attributes associated with entries in the sparse edge table,
+        with one master matrix that backs a sparse iterator over existent entries.
+        However, this code does not load the entire file. Instead, the iterator steps
+        through it as an input stream.
     **/
     public static class MatrixSonataEdgesXSV extends Matrix implements AutoCloseable
     {
-        protected String          key;
-        protected Input.HolderXSV holder;
-        protected String          attribute;
-        protected boolean         haveColumns;
-        protected int             colAttribute;
-        protected int             colSource;
-        protected int             colTarget;
-        protected double          emptyValue = 0;
+        protected Input.HolderXSV      input;        // Our private object. This handles reading the input stream.
+        protected boolean              haveColumns;  // Indicates that column indices have been determined.
 
-        public MatrixSonataEdgesXSV (String key, Path path, String attribute) throws IOException
+        // Data for main iterator.
+        protected int                  row;
+        protected int                  colSource;
+        protected int                  colTarget;
+
+        // Data for attributes that track main iterator.
+        protected MatrixSonataEdgesXSV track;
+        protected String               attribute;
+        protected int                  colAttribute;
+        protected double               emptyValue = 0;
+
+        /**
+            @param key 
+        **/
+        public MatrixSonataEdgesXSV (String fileName, String attribute) throws IOException
         {
-            this.key       = key;
             this.attribute = attribute;
-
             Simulator simulator = Simulator.instance.get ();
-            Object Η = simulator.holders.get (key);
-            if (Η == null)
+
+            if (attribute.isBlank ())  // main iterator
             {
-                holder = new Input.HolderXSV (simulator, path.toString (), false);
-                simulator.holders.put (key, holder);
+                input = new Input.HolderXSV (simulator, fileName, false);
+                track = this;
             }
-            else if (Η instanceof Input.HolderXSV)
+            else  // attribute that tracks with main iterator
             {
-                holder = (Input.HolderXSV) Η;
-            }
-            else
-            {
-                throw new AbortRun ("matrix ERROR: Reopening file as a different resource type: " + key);
+                // Retrieve main iterator.
+                String key = fileName + "|";  // No attribute appended.
+                track = (MatrixSonataEdgesXSV) simulator.holders.get (key);
+                if (track == null) throw new AbortRun ("Attempt to create SONATA edge attribute matrix before sparse iterator is created.");
+
+                input = track.input;
             }
        }
 
         public void close () throws Exception
         {
-            holder = null;  // The base holder will get closed separately during simulator shutdown.
+            input.close ();
         }
 
         public int rows ()
@@ -326,7 +379,7 @@ public class ReadMatrix extends Function
 
         public int columns ()
         {
-            throw new AbortRun ("MatrixSonataEdgesXSV does not support columns()");
+            return input.columnCount;
         }
 
         /**
@@ -334,10 +387,20 @@ public class ReadMatrix extends Function
         **/
         public double get (int row, int column)
         {
-            if (attribute == "") return 1;  // If attribute is absent, we assume boolean matrix. In that case, always return 1, because this function should only be called for existent elements.
-            if (row > holder.currentLine  &&  Double.isNaN (holder.nextLine)) return emptyValue;
-            if (colAttribute < 0) return emptyValue;
-            return holder.currentValues[colAttribute];
+            if (attribute.isBlank ()) return 1;  // If attribute is absent, we assume boolean matrix. In that case, always return 1, because this function should only be called for existent elements.
+
+            if (! haveColumns)
+            {
+                colAttribute = input.columnMap.get (attribute);
+                if (colAttribute < 0)
+                {
+                    PrintStream ps = Backend.err.get ();
+                    ps.println ("ERROR: attribute column missing from edges file: " + attribute);  // TODO: save the file name, just for this error message?
+                }
+                haveColumns = true;
+            }
+            if (colAttribute < 0  ||  colAttribute >= input.currentValues.length) return emptyValue;
+            return input.currentValues[colAttribute];
         }
 
         public void set (int row, int column, double a)
@@ -347,53 +410,49 @@ public class ReadMatrix extends Function
 
         public class IteratorEdge implements IteratorNonzero
         {
-            int row;
-
             public boolean hasNext ()
             {
                 // The first clause below checks whether we have read any rows yet.
                 // The second clause checks if there is any future data.
-                return  holder.currentLine < 0  ||  ! Double.isNaN (holder.nextLine);
+                return  input.currentLine < 0  ||  ! Double.isNaN (input.nextLine);
             }
 
             public Double next ()
             {
                 try
                 {
-                    holder.getRow (row);
+                    input.getRow (row);
                 }
                 catch (IOException e)
                 {
                     return null;
                 }
-                if (row > holder.currentLine) return null;
-                row++;
+                if (row > input.currentLine) return null;  // Could not retrieve
+                row++;  // Effectively, this is really next row.
 
                 if (! haveColumns)
                 {
-                    colAttribute = holder.columnMap.get (attribute);
-                    colSource    = holder.columnMap.get ("source_node_id");
-                    colTarget    = holder.columnMap.get ("target_node_id");
-                    if (! attribute.isBlank ()  &&  colAttribute < 0  ||  colSource < 0  ||  colTarget < 0)
+                    colSource = input.columnMap.get ("source_node_id");
+                    colTarget = input.columnMap.get ("target_node_id");
+                    if (colSource < 0  ||  colTarget < 0)
                     {
                         PrintStream ps = Backend.err.get ();
-                        ps.println ("ERROR: required columns are missing from edges file");  // TODO: save the file name, just for this error message?
+                        ps.println ("ERROR: source_node_id or target_node_id is missing from edges file");
                     }
                     haveColumns = true;
                 }
 
-                if (colAttribute < 0) return 1.0; // Since we iterate only existing elements, always return true.
-                return holder.currentValues[colAttribute];
+                return 1.0; // Since we iterate only existing elements, always return true.
             }
 
             public int getRow ()
             {
-                return (int) holder.currentValues[colSource];
+                return (int) input.currentValues[colSource];
             }
 
             public int getColumn ()
             {
-                return (int) holder.currentValues[colTarget];
+                return (int) input.currentValues[colTarget];
             }
         }
     }

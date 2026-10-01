@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -164,7 +164,7 @@ SHARED Matrix<int> glRotate2 (int angle, const MatrixFixed<int,3,1> & axis, int 
 SHARED Matrix<int> glRotate (int angle, int x, int y, int z, int exponent);
 SHARED Matrix<int> glScale (const MatrixFixed<int,3,1> & scales, int exponent);
 SHARED Matrix<int> glScale (int sx, int sy, int sz, int exponent);
-       Matrix<int> glScale (int s, int exponent) {return glScale (s, s, s, exponent);}
+inline Matrix<int> glScale (int s, int exponent) {return glScale (s, s, s, exponent);}
 SHARED Matrix<int> glTranslate (const MatrixFixed<int,3,1> & position, int exponent);
 SHARED Matrix<int> glTranslate (int x, int y, int z, int exponent);
 #else
@@ -551,7 +551,7 @@ struct SHARED Simulator
     void connect  (Population<T> * population);        ///< Schedule connections to be evaluated at end of current cycle, after all resizing is done.
     void clearNew (Population<T> * population);        ///< Schedule population to have its newborn index reset after all new connections are evaluated.
 
-    Holder * getHolder (const String & fileName, Holder * oldHandle);
+    Holder * getHolder (const String & fileName, Holder * oldHandle);  ///< Returns holder whose fileName matches the passed value, or null if none exists. Allows existing holder to close and reopen under new fileName by disposing of "oldHandle" if its fileName is different.
 };
 #ifdef n2a_TLS
 // Normally, this template would defined in runtime.tcc

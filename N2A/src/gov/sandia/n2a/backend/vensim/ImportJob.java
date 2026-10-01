@@ -1,12 +1,12 @@
 /*
-Copyright 2019-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2019-2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
 
 package gov.sandia.n2a.backend.vensim;
 
-import gov.sandia.n2a.backend.vensim.Spreadsheet.Holder;
+import gov.sandia.n2a.language.function.Table.HolderSheet;
 import gov.sandia.n2a.db.MNode;
 import gov.sandia.n2a.db.MPart;
 import gov.sandia.n2a.db.MVolatile;
@@ -256,7 +256,7 @@ public class ImportJob
                             String fileName = xls.operands.get (0).value;
                             try
                             {
-                                Holder H = new Holder (sourceDir.resolve (fileName));
+                                HolderSheet H = new HolderSheet (sourceDir.resolve (fileName).toString ());
                                 String sheetName = xls.operands.get (1).value;
                                 if (H.wb.containsKey (sheetName))
                                 {

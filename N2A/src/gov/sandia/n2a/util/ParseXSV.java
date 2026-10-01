@@ -14,82 +14,84 @@ import java.util.List;
 /**
     See OutputParser for redundant implementations of the XSV parser.
 **/
-public abstract class ParseXSV
+public class ParseXSV
 {
-    public char delimiter = ' ';  // space char, initially
-    public int  columns   = 1;
+    public char    delimiter = ' ';  // space char, initially
+    public boolean delimiterSet;
 
-    public void parse (BufferedReader reader) throws IOException
+    public boolean parseLine (BufferedReader reader, List<String> parts) throws IOException
     {
-        boolean delimiterSet = false;
-        while (true)
+        parts.clear ();
+
+        String line = reader.readLine ();
+        if (line == null) return false;  // indicates end of stream
+        if (line.length () == 0) return true;
+
+        char chars[] = line.toCharArray ();
+        boolean inQuote = false;
+        if (! delimiterSet)
         {
-            String line = reader.readLine ();
-            if (line == null) break;  // indicates end of stream
-            if (line.length () == 0) continue;
-
-            char chars[] = line.toCharArray ();
-            if (! delimiterSet)
+            // Scan for first delimiter character that is not inside a quote.
+            for (char c : chars)
             {
-                // Scan for first delimiter character that is not inside a quote.
-                boolean inQuote = false;
-                for (char c : chars)
-                {
-                    if (c == '\"')
-                    {
-                        inQuote = ! inQuote;
-                        continue;
-                    }
-                    if (inQuote) continue;
-                    if (c == '\t')
-                    {
-                        delimiter = c;
-                        break;
-                    }
-                    if (c == ',') delimiter = c;
-                    // space character is lowest precedence
-                }
-                delimiterSet =  delimiter != ' '  ||  ! line.isBlank ();
-            }
-
-            // Break line into delimited strings, possibly quoted.
-            List<String> parts = new ArrayList<String> (columns);
-            boolean inQuote = false;
-            StringBuilder token = new StringBuilder ();
-            for (int i = 0; i < chars.length; i++)
-            {
-                char c = chars[i];
                 if (c == '\"')
                 {
-                    if (inQuote  &&  i < chars.length - 1  &&  chars[i+1] == '\"')
-                    {
-                        token.append (c);
-                        i++;
-                        continue;
-                    }
                     inQuote = ! inQuote;
                     continue;
                 }
-                if (c == delimiter  &&  ! inQuote)
+                if (inQuote) continue;
+                if (c == '\t')
                 {
-                    parts.add (token.toString ());
-                    token.setLength (0);
+                    delimiter = c;
+                    break;
+                }
+                if (c == ',') delimiter = c;
+                // space character is lowest precedence
+            }
+            delimiterSet =  delimiter != ' '  ||  ! line.isBlank ();
+        }
+
+        // Break line into delimited strings, possibly quoted.
+        inQuote = false;
+        StringBuilder token = new StringBuilder ();
+        for (int i = 0; i < chars.length; i++)
+        {
+            char c = chars[i];
+            if (c == '\"')
+            {
+                if (inQuote  &&  i < chars.length - 1  &&  chars[i+1] == '\"')
+                {
+                    token.append (c);
+                    i++;
                     continue;
                 }
-                token.append (c);
+                inQuote = ! inQuote;
+                continue;
             }
-            if (! token.isEmpty ()) parts.add (token.toString ());
-            columns = Math.max (parts.size (), columns);
-
-            // Process line.
-            boolean keepGoing = processLine (parts);
-            if (! keepGoing) break;
+            if (c == delimiter  &&  ! inQuote)
+            {
+                parts.add (token.toString ());
+                token.setLength (0);
+                continue;
+            }
+            token.append (c);
         }
+        if (! token.isEmpty ()) parts.add (token.toString ());
+        return true;
+    }
+
+    public void parse (BufferedReader reader) throws IOException
+    {
+        List<String> parts = new ArrayList<String> ();
+        while (parseLine (reader, parts)) if (! processLine (parts)) break;
     }
 
     /**
         @param parts The columns found on the current row.
         @return true to continue parsing the file. false to stop early.
     **/
-    public abstract boolean processLine (List<String> parts);
+    public boolean processLine (List<String> parts)
+    {
+        return true;
+    }
 }

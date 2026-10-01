@@ -3,7 +3,7 @@ Author: Fred Rothganger
 Created 3/11/2006 to provide machine endian related defines and functions
 
 
-Copyright 2009 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2009-2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -19,6 +19,7 @@ the U.S. Government retains certain rights in this software.
    // MSVC generally compiles to i86.  Deal with other cases (such as alpha)
    // as they come up.
 #  define LITTLE_ENDIAN 1234
+#  define BIG_ENDIAN    4321
 #  define BYTE_ORDER    LITTLE_ENDIAN
 #else
 #  ifdef __APPLE__  // Because, of course, Apple does everything better.

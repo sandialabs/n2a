@@ -7,7 +7,7 @@ can be compiled separately and added to a library. In the latter case, you can
 use this header file like any other, to bring in symbols so you can use MNode
 in an application.
 
-Copyright 2022-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2022-2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -61,8 +61,9 @@ namespace n2a
     class SHARED MPart;
     class SHARED MPartRepo;
     class SHARED Schema;
-    class SHARED Schema2;
     class LineReader;
+    class SHARED Schema2;
+    class SHARED JSON;
 
     /**
         A hierarchical key-value storage system, with subclasses that provide persistence.
@@ -77,7 +78,7 @@ namespace n2a
     class SHARED MNode
     {
     public:
-        static MNode none;  // For return values, indicating node does not exist. Iterating over none will produce no children.
+        static MNode none;  // For return values, indicating node does not exist. Iterating over none will produce no children. Must never be modified by caller.
 
         virtual ~MNode ();
         virtual uint32_t classID () const;
@@ -1262,9 +1263,10 @@ namespace n2a
             Convenience method which reads the header and loads all the objects as children of the given node.
             @param node The contents of the stream get added to this node. The node does not have to be empty,
             but any key that matches a node in the stream will get overwritten.
-            @param schema Returns a pointer to the interpreter object. This can be used to obtain version
-            information. The caller is responsible to delete this object, or memory will leak. If nullptr is
-            passed, this function will delete the object internally.
+            @param schema Returns a pointer to the interpreter object, or null if the stream does not start with
+            a valid magic string. The pointer can be used to obtain version information. The caller is responsible
+            to delete this object, or memory will leak. If nullptr is passed, this function will delete the
+            object internally.
         **/
         static void readAll (MNode & node, std::istream & reader, Schema ** schema = nullptr);
 
@@ -1284,12 +1286,12 @@ namespace n2a
             The node itself (that is, its key and value) are not written out. The node simply acts
             as a container for the nodes that get written.
         **/
-        void writeAll (MNode & node, std::ostream & writer);
+        virtual void writeAll (MNode & node, std::ostream & writer);
 
         /**
             Writes the header.
         **/
-        void write (std::ostream & writer);
+        virtual void write (std::ostream & writer);
 
         /**
             Convenience function for calling write(MNode,ostream,string) with no initial indent.
@@ -1323,10 +1325,12 @@ namespace n2a
         void getNextLine ();
     };
 
-    class JSON
+    class SHARED JSON : public Schema
     {
     public:
         String tab = "  ";
+
+        JSON ();
 
         /**
             Obtain either the value or children of the current node.
@@ -1346,7 +1350,19 @@ namespace n2a
             In this case, we only read children values, not keys. Keys will be
             created automatically as integers 0, 1, 2, ...
         **/
-        void readArray (MNode & node, std::istream & reader);
+        void readArray (MNode & node, std::istream & reader, char delimiter);
+
+        /**
+            For consistency with Schema, we treat this as a request to write just the
+            children of the node. To save "node" itself, along with its children,
+            start instead with a call to write(MNode,ostream).
+        **/
+        virtual void writeAll (MNode & node, std::ostream & writer);
+
+        /**
+            JSON doesn't have a magic identifier, so this function writes nothing to the file.
+        **/
+        virtual void write (std::ostream & writer);
 
         /**
             This is the start point for writing a JSON file.
@@ -1379,7 +1395,7 @@ namespace n2a
             closing quote. Returns the extracted string with escapes converted back into
             regular characters.
         **/
-        static String extractString (std::istream & reader);
+        static String extractString (std::istream & reader, char delimiter);
     };
 
     // Utility functions

@@ -145,7 +145,8 @@ public class MatrixDense extends Matrix
     **/
     public MatrixDense (FileSystem npz, String stem) throws EvaluationException
     {
-        loadNPY (npz.getPath (stem + ".npy"));
+        if (! stem.toLowerCase ().endsWith (".npy")) stem += ".npy";
+        loadNPY (npz.getPath (stem));
     }
 
     public MatrixDense (Text that) throws EvaluationException

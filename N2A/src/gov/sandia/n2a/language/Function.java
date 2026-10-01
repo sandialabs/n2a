@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -402,12 +402,11 @@ public class Function extends Operator
     **/
     public int getExponentHint (int defaultValue)
     {
-        if (keywords == null) return defaultValue;
-        Operator median = keywords.get ("median");
+        Operator median = getKeyword ("median");
         if (median == null) return defaultValue;
 
         double value = median.getDouble ();
-        if (value <= 0) return 0;
+        if (value <= 0) return 0;  // median is supposed to be on absolute value, so negative numbers are invalid.
         return (int) Math.floor (Math.log (value) / Math.log (2));  // log base 2
     }
 

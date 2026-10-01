@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -54,6 +54,7 @@ import gov.sandia.n2a.language.function.Rows;
 import gov.sandia.n2a.language.function.Sat;
 import gov.sandia.n2a.language.function.SquareRoot;
 import gov.sandia.n2a.language.function.SumSquares;
+import gov.sandia.n2a.language.function.Table;
 import gov.sandia.n2a.language.function.Tangent;
 import gov.sandia.n2a.language.function.Uniform;
 import gov.sandia.n2a.language.function.glRotate;
@@ -755,10 +756,13 @@ public class RendererC extends Renderer
         if (op instanceof ReadMatrix)
         {
             ReadMatrix r = (ReadMatrix) op;
+            Operator anchor = r.getKeyword ("anchor");
             // Currently, ReadMatrix sets its exponent = exponentNext, so we will never do a shift here.
             // Any shifting should be handled by matrixHelper while loading and converting the matrix to integer.
             if (! (r.parent instanceof Variable)  ||  ! ((Variable) r.parent).hasAttribute ("MatrixPointer")) result.append ("*");  // matrices are held in pointers, so need to dereference
-            result.append (r.name + "->A");
+            result.append (r.name + "->getMatrix (");
+            if (anchor != null) result.append ("\"" + anchor.getString () + "\"");  // Just assume string constant.
+            result.append (")");
             return true;
         }
         if (op instanceof Rows)
@@ -809,6 +813,56 @@ public class RendererC extends Renderer
             A.render (this);
             if (useExponent) result.append (", " + A.exponentNext + ", " + ss.exponentNext);
             result.append (")");
+            return true;
+        }
+        if (op instanceof Table)
+        {
+            Table t = (Table) op;
+            Operator info     = t.getKeyword     ("info");
+            boolean  isString = t.getKeywordFlag ("string");
+            Operator anchor   = t.getKeyword     ("anchor");
+
+            String call = "get";
+            if (info != null)
+            {
+                String p = info.getString ().trim ();
+                if (   p.equals ("rows")
+                    || p.equals ("columns")
+                    || p.equals ("rowsInColumn")
+                    || p.equals ("columnsInRow"))
+                {
+                    call = p;
+                }
+            }
+            else if (isString)
+            {
+                call = "getString";
+            }
+
+            int shift = t.exponent - t.exponentNext;  // If isString, this should be zero. Should we enforce this?
+            if (useExponent  &&  shift != 0) result.append ("(");
+
+            result.append (t.name + "->" + call + " (");
+            boolean first = true;
+            if (anchor != null)
+            {
+                anchor.render (this);
+                first = false;
+            }
+            if (call.equals ("get"))
+            {
+                int length = t.operands.length;
+                for (int i = 1; i < 3; i++)  // Need row and column arguments. These can't be provided by C++ default, due to ambiguous function resolution.
+                {
+                    if (! first) result.append (", ");
+                    if (i < length) t.operands[i].render (this);
+                    else            result.append ("0");
+                    first = false;
+                }
+            }
+            result.append (")");
+
+            if (useExponent  &&  shift != 0) result.append (RendererC.printShift (shift) + ")");
             return true;
         }
         if (op instanceof Tangent)

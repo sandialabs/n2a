@@ -1152,7 +1152,14 @@ n2a::MDoc::load ()
     try
     {
         std::ifstream ifs (file.c_str ());
-        Schema::readAll (*this, ifs);
+        Schema * schema = Schema::read (ifs);
+        if (! schema)
+        {
+            ifs.seekg (0);
+            schema = new JSON;
+        }
+        schema->read (*this, ifs);
+        delete schema;
         ifs.close ();
     }
     catch (...)  // An exception is common for a newly created doc that has not yet been flushed to disk.
@@ -2660,9 +2667,10 @@ void
 n2a::Schema::readAll (MNode & node, std::istream & reader, Schema ** schema)
 {
     Schema * result = read (reader);
-    result->read (node, reader);
     if (schema) *schema = result;
-    else        delete result;
+    if (! result) return;
+    result->read (node, reader);
+    if (! schema) delete result;
 }
 
 n2a::Schema *
@@ -2670,10 +2678,10 @@ n2a::Schema::read (std::istream & reader)
 {
     String line;
     getline (reader, line);
-    if (! reader.good ()) throw "File is empty.";
+    if (! reader.good ()) return 0;
     line.trim ();
-    if (line.size () < 12) throw "Malformed schema line.";
-    if (line.substr (0, 11) != "N2A.schema=") throw "Schema line missing or malformed.";
+    if (line.size () < 12) return 0;
+    if (line.substr (0, 11) != "N2A.schema=") return 0;
     line = line.substr (11);
 
     String::size_type pos = line.find_first_of (",");
@@ -2896,6 +2904,11 @@ n2a::Schema2::write (MNode & node, std::ostream & writer, const String & indent)
 
 // class JSON ----------------------------------------------------------------
 
+n2a::JSON::JSON ()
+:   Schema (-1, "JSON")  // Not really part of schema version numbering. And there is no particular type. We call it "JSON" in case this is useful for type identification.
+{
+}
+
 void
 n2a::JSON::read (MNode & node, std::istream & reader)
 {
@@ -2929,22 +2942,26 @@ n2a::JSON::read (MNode & node, std::istream & reader)
         {
             readChildren (node, reader);
         }
-        else if (c == '[')  // start of array
+        else if (c == '[')  // Start of array, for proper JSON.
         {
-            readArray (node, reader);
+            readArray (node, reader, ']');
         }
-        else if (c == '"')  // string value
+        else if (c == '(')  // Also start of array, for Python tuples.
         {
-            node.set (extractString (reader));
+            readArray (node, reader, ')');
         }
-        else if (c == 't')  // true
+        else if (c == '"'  ||  c == '\'')  // string value
+        {
+            node.set (extractString (reader, c));
+        }
+        else if (c == 't'  ||  c == 'T')  // true
         {
             char buffer[3];
             reader.read (buffer, 3);
             if (reader.fail ()) throw "Incomplete token";
             node.set (true);
         }
-        else if (c == 'f')  // false
+        else if (c == 'f'  ||  c == 'F')  // false
         {
             char buffer[4];
             reader.read (buffer, 4);
@@ -2985,8 +3002,8 @@ n2a::JSON::readChildren (MNode & node, std::istream & reader)
         {
             case 0:
             {
-                if (c != '"') throw "Expected string";
-                key = extractString (reader);
+                if (c != '"'  &&  c != '\'') throw "Expected string";
+                key = extractString (reader, c);
                 state = 1;
                 break;
             }
@@ -3018,7 +3035,7 @@ n2a::JSON::readChildren (MNode & node, std::istream & reader)
 }
 
 void
-n2a::JSON::readArray (MNode & node, std::istream & reader)
+n2a::JSON::readArray (MNode & node, std::istream & reader, char delimiter)
 {
     int key = 0;
     while (true)
@@ -3027,7 +3044,7 @@ n2a::JSON::readArray (MNode & node, std::istream & reader)
         if (i < 0) break;
         char c = (char) i;
         if (c == ' '  ||  c == '\t'  ||  c == '\r'  ||  c == '\n') continue;  // consume white space
-        if (c == ']') break;  // This could appear prematurely. We exit anyway.
+        if (c == delimiter) break;  // This could appear prematurely. We exit anyway.
 
         if (c == ',')
         {
@@ -3042,11 +3059,20 @@ n2a::JSON::readArray (MNode & node, std::istream & reader)
     }
 }
 
-/**
-    This is the start point for writing a JSON file.
-    It can write either the value or children of node, depending on what is present.
-    The children can either be a list or object.
-**/
+void
+n2a::JSON::writeAll (MNode & node, std::ostream & writer)
+{
+    writer << "{\n";
+    writeChildren (node, writer, tab);
+    writer << "\n}";
+}
+
+void
+n2a::JSON::write (std::ostream & writer)
+{
+    // Do nothing.
+}
+
 void
 n2a::JSON::write (MNode & node, std::ostream & writer)
 {
@@ -3166,7 +3192,7 @@ n2a::JSON::escape (const String & value)
 }
 
 String
-n2a::JSON::extractString (std::istream & reader)
+n2a::JSON::extractString (std::istream & reader, char delimiter)
 {
     String result;
     bool inEscape = false;
@@ -3198,7 +3224,7 @@ n2a::JSON::extractString (std::istream & reader)
         {
             inEscape = true;
         }
-        else if (c == '"')
+        else if (c == delimiter)
         {
             break;
         }

@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -181,7 +181,15 @@ public class MDoc extends MPersistent
         int version = -1;
         try (BufferedReader br = Files.newBufferedReader (file))
         {
-            version = Schema.readAll (this, br).version;
+            br.mark (80);  // Enough for the N2A schema line, if present.
+            Schema schema = Schema.read (br);
+            if (schema == null)  // Only switch to JSON if magic is not "N2A...".
+            {
+                br.reset ();
+                schema = new JSON ();  // and version is still -1, which should produce no action below.
+            }
+            schema.read (this, br);
+            version = schema.version;
         }
         catch (IOException e) {}  // This exception is common for a newly created doc that has not yet been flushed to disk.
         clearChanged ();  // After load(), clear the slate so we can detect any changes and save the document.

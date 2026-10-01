@@ -33,6 +33,7 @@ import gov.sandia.n2a.language.type.Scalar;
 import gov.sandia.n2a.language.type.Text;
 import gov.sandia.n2a.linear.MatrixDense;
 import gov.sandia.n2a.plugins.extpoints.Backend;
+import gov.sandia.n2a.util.ParseXSV;
 import io.jhdf.HdfFile;
 import io.jhdf.api.Attribute;
 import io.jhdf.api.Dataset;
@@ -148,10 +149,8 @@ public class Input extends Function
 
     public static class HolderXSV extends Holder
     {
-        public BufferedReader      stream;
-        public char                delimiter = ' ';  // Separator character. Allows switch between comma and space/tab.
-        public boolean             delimiterSet;     // Indicates that check for CSV has been performed. Avoids constant re-checking.
-        public boolean             firstRow  = true;
+        protected BufferedReader stream;
+        protected ParseXSV       parser;
 
         public HolderXSV (Simulator simulator, String path, boolean time) throws IOException
         {
@@ -178,69 +177,18 @@ public class Input extends Function
                 // Read and process next line
                 if (Double.isNaN (nextLine)  &&  stream.ready ())
                 {
-                    String line = stream.readLine ();
-                    if (line != null  &&  ! line.isEmpty ())
+                    List<String> columns = new ArrayList<String> ();
+                    boolean good = parser.parseLine (stream, columns);
+                    if (good  &&  ! columns.isEmpty ())
                     {
-                        char chars[] = line.toCharArray ();
-                        if (! delimiterSet)
-                        {
-                            // Scan for first delimiter character that is not inside a quote.
-                            boolean inQuote = false;
-                            for (char c : chars)
-                            {
-                                if (c == '\"')
-                                {
-                                    inQuote = ! inQuote;
-                                    continue;
-                                }
-                                if (inQuote) continue;
-                                if (c == '\t')
-                                {
-                                    delimiter = c;
-                                    break;
-                                }
-                                if (c == ',') delimiter = c;
-                                // space character is lowest precedence
-                            }
-                            delimiterSet =  delimiter != ' '  ||  ! line.trim ().isEmpty ();
-                        }
-
-                        // Break line into delimited strings, possibly quoted.
-                        List<String> columns = new ArrayList<String> ();
-                        boolean inQuote = false;
-                        StringBuilder token = new StringBuilder ();
-                        for (int i = 0; i < chars.length; i++)
-                        {
-                            char c = chars[i];
-                            if (c == '\"')
-                            {
-                                if (inQuote  &&  i < chars.length - 1  &&  chars[i+1] == '\"')
-                                {
-                                    token.append (c);
-                                    i++;
-                                    continue;
-                                }
-                                inQuote = ! inQuote;
-                                continue;
-                            }
-                            if (c == delimiter  &&  ! inQuote)
-                            {
-                                columns.add (token.toString ());
-                                token.setLength (0);
-                                continue;
-                            }
-                            token.append (c);
-                        }
-                        if (! token.isEmpty ()) columns.add (token.toString ());
-
                         int currentColumnCount = columns.size ();
                         columnCount = Math.max (columnCount, currentColumnCount);
 
                         // Decide whether this is a header row or a value row
-                        if (! columns.get (0).isEmpty ()  ||  firstRow)  // Only process rows that are likely to have column info.
+                        String firstColumn = columns.get (0);
+                        if (! firstColumn.isEmpty ())  // Only process rows that are likely to have column info.
                         {
-                            firstRow = false;
-                            char firstCharacter = chars[0];
+                            char firstCharacter = firstColumn.charAt (0);
                             if (firstCharacter < '-'  ||  firstCharacter == '/'  ||  firstCharacter > '9')  // not a number, so must be column header
                             {
                                 for (int i = 0; i < currentColumnCount; i++)
@@ -331,33 +279,45 @@ public class Input extends Function
     **/
     public static class SubHolderHDF
     {
+        public String  fileName;  // Our key is the original fileName string, as written by the user.
         public HdfFile file;
         public int     users;
 
-        protected static HashMap<Path,SubHolderHDF> files = new HashMap<Path,SubHolderHDF> ();
+        protected static HashMap<String,SubHolderHDF> files = new HashMap<String,SubHolderHDF> ();
 
-        public static synchronized SubHolderHDF allocate (Path path)
+        public static synchronized SubHolderHDF allocate (String fileName)
         {
-            SubHolderHDF result = files.get (path);
+            SubHolderHDF result = files.get (fileName);
             if (result == null)
             {
-                result = new SubHolderHDF ();
-                result.file = new HdfFile (path);
-                files.put (path, result);
+                Path path = Simulator.instance.get ().jobDir.resolve (fileName);
+                result          = new SubHolderHDF ();
+                result.fileName = fileName;
+                result.file     = new HdfFile (path);
+                files.put (fileName, result);
             }
             result.users++;
             return result;
         }
 
-        public static synchronized void release (Path path)
+        public void allocate ()
         {
-            SubHolderHDF sub = files.get (path);
-            sub.users--;
-            if (sub.users <= 0)
+            synchronized (SubHolderHDF.class)
             {
-                try {sub.file.close ();}
+                users++;
+            }
+        }
+
+        public void release ()
+        {
+            synchronized (SubHolderHDF.class)
+            {
+                users--;
+                if (users > 0) return;
+
+                try {file.close ();}
                 catch (HdfException e) {}
-                files.remove (path);
+                files.remove (fileName);
             }
         }
     }
@@ -368,14 +328,14 @@ public class Input extends Function
     **/
     public static class HolderHDF extends Holder
     {
-        protected Path     filePath;
-        protected Dataset  data;
-        protected Object   flat;        // If slicing is not allowed, this holds the full raw data.
-        protected int      rowCount;
-        protected double   startingTime;
-        protected double   period;
-        protected double[] timestamps;  // If null, use startingTime+N*period. If non-null, treat this as time column.
-        protected int      lastRow;     // When using timestamps, where to start search.
+        protected SubHolderHDF sub;
+        protected Dataset      data;
+        protected Object       flat;        // If slicing is not allowed, this holds the full raw data.
+        protected int          rowCount;
+        protected double       startingTime;
+        protected double       period;
+        protected double[]     timestamps;  // If null, use startingTime+N*period. If non-null, treat this as time column.
+        protected int          lastRow;     // When using timestamps, where to start search.
 
         /**
             @param fileName To the HDF file. Not the same as the key for looking Holder. Specifically, the
@@ -387,8 +347,7 @@ public class Input extends Function
         {
             super (simulator, time);
 
-            filePath = simulator.jobDir.resolve (fileName);
-            SubHolderHDF sub = SubHolderHDF.allocate (filePath);
+            sub = SubHolderHDF.allocate (fileName);
             HdfFile file = sub.file;
 
             Node node = file.getByPath (resource);
@@ -433,7 +392,7 @@ public class Input extends Function
 
         public void close ()
         {
-            SubHolderHDF.release (filePath);
+            sub.release ();
         }
 
         public void getRow (double requested) throws IOException
@@ -617,7 +576,12 @@ public class Input extends Function
             String  hdf    = evalKeyword (context, "hdf", "");
 
             String key = path;
-            if (! hdf.isBlank ()) key += "|" + hdf;  // Because multiple holders can share same HDF file.
+            if (! hdf.isBlank ())
+            {
+                if (hdf.startsWith ("/")) hdf = hdf.substring (1);                     // Never start with a slash.
+                if (hdf.endsWith   ("/")) hdf = hdf.substring (0, hdf.length () - 1);  // Never end with a slash.
+                key += "|" + hdf;  // Because multiple holders can share same HDF file.
+            }
             Object o = simulator.holders.get (key);
             if (o == null)  // Need to open new file.
             {

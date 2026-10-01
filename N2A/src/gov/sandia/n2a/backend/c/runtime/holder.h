@@ -11,8 +11,32 @@ Download the following files and place them in same directory as holder.h:
     https://www.khronos.org/registry/OpenGL/api/GL/wglext.h
 Store in subdirectory KHR:
     https://www.khronos.org/registry/EGL/api/KHR/khrplatform.h
-*/
 
+
+For Excel spreadsheet support, this software depends on external packages miniz and pugixml.
+NumPy matrix support also depends on miniz.
+
+https://github.com/zeux/pugixml -- Get the release zip, unpack, and place the following files in same directory as holder.h:
+    pugixml.cpp
+    pugixml.hpp
+    pugiconfig.hpp
+    LICENSE.md --> gov/sandia/n2a/ui/settings/licenses/pugixml
+
+Uncomment the following defines in pugiconfig.hpp:
+    #define PUGIXML_COMPACT
+    #define PUGIXML_NO_XPATH
+    #define PUGIXML_NO_STL
+    #define PUGIXML_NO_EXCEPTIONS
+    #define PUGIXML_HEADER_ONLY
+
+https://github.com/richgel999/miniz -- Get the release zip, unpack, and place these files in the same directory as holder.h:
+    miniz.c
+    miniz.h
+    LICENSE --> gov/sandia/n2a/ui/settings/licenses/miniz
+
+Uncomment the following define in miniz.h:
+    #define MINIZ_NO_ARCHIVE_WRITING_APIS
+*/
 
 #ifndef n2a_holder_h
 #define n2a_holder_h
@@ -23,6 +47,7 @@ Store in subdirectory KHR:
 #include "matrix.h"
 #include "MNode.h"
 #include "canvas.h"
+#include "miniz.h"
 #ifdef HAVE_FFMPEG
 #  include "video.h"
 #endif
@@ -70,11 +95,79 @@ struct SHARED Parameters
     String get   (const String & name, const String & defaultValue = "") const;
 };
 
+/**
+    Facility to parse XSV files.
+    This separates the interpretation of the data from the parsing, allowing the parse code to be reused (DRY).
+    This does not handle streaming
+**/
+struct SHARED ParseXSV
+{
+    char delimiter;  // space char, initially
+    bool delimiterSet;
+    int  tokenCapacity;
+
+    ParseXSV ();
+
+    /**
+        Reads one line from the file.
+        Blocks until a full line has arrived, or EOF or error.
+        @param parts Filled with current row. At EOF or error, this holds all data that was successfully
+        read before the end was reached.
+    **/
+    void parseLine (std::istream & in, std::vector<String> & parts);
+    void parse (std::istream & in);  ///< Reads entire file, calling processLine() for each valid line.
+
+    /**
+        @param parts The columns found on the current row.
+        @return true to continue parsing the file. false to stop early.
+    **/
+    virtual bool processLine (std::vector<String> & parts);
+};
+
+struct SHARED ZipFile
+{
+    mz_zip_archive archive;
+    String         fileName;
+
+    ZipFile (const String & fileName = "");  ///< Empty string means don't open a file now.
+    ~ZipFile ();
+
+    static bool probe      (const String & fileName);
+
+    void   open       (const String & fileName);
+    void   close      ();
+    bool   isOpen     ();
+    /**
+        Decompresses the binary contents of the entry.
+        Our custom String class is currently limited to 1GiB.
+        @return Any failure results in an empty string. The caller must decide whether this is tolerable or fatal.
+    **/
+    String extract    (const String & entryName);
+    bool   exists     (const String & entryName);
+    int    entryCount ();
+    String entryName  (int index);
+};
+
 struct SHARED Holder
 {
     String fileName;
     Holder (const String & fileName);
-    virtual ~Holder ();
+    virtual ~Holder () = default;
+};
+
+template<class T>
+struct SHARED HolderMatrix : public Holder
+{
+    HolderMatrix (const String & fileName);
+
+    /**
+        Retrieve a matrix for some portion of this holder's content.
+        @param resource A subclass-specific path to more specific content inside this holder.
+        The char pointer is only valid during the call.
+        @return A pointer to the matrix. This holder remains responsible for the
+        associated memory. The caller can simply forget the pointer when it is done.
+    **/
+    virtual MatrixAbstract<T> * getMatrix (const char * resource = 0) = 0;
 };
 
 template<class T>
@@ -112,23 +205,458 @@ struct SHARED IteratorSparse : public IteratorNonzero<T>
     virtual bool next ();
 };
 
-SHARED int convert (String input, int exponent);
-
 template<class T>
-struct SHARED MatrixInput : public Holder
+struct SHARED MatrixInput : public HolderMatrix<T>
 {
     MatrixAbstract<T> * A;  // Will be either Matrix or MatrixSparse, determined by matrixHelper when reading the file.
 
     MatrixInput (const String & fileName);
     virtual ~MatrixInput ();
+
+#   ifdef n2a_FP
+    void loadNPY          (                                         int exponent);
+    void loadTextDense    (                                         int exponent);
+    void loadTextSparse   (                           T emptyValue, int exponent);
+    void loadSonataSpikes (const String & population, T emptyValue, int exponent);
+#   else
+    void loadNPY          ();
+    void loadTextDense    ();
+    void loadTextSparse   (                           T emptyValue);
+    void loadSonataSpikes (const String & population, T emptyValue);
+#   endif
+
+    virtual MatrixAbstract<T> * getMatrix (const char * resource = 0);  ///< Returns A. "resource" is ignored.
 };
+
+// There is a wide variety of file types that can be loaded as a matrix.
+// The different types are handled by a family of matrix helper functions.
+// The code generator does initial triage based on keywords passed to matrix(), and selects the right helper.
 #ifdef n2a_FP
-template<class T> SHARED MatrixInput<T> * matrixHelper (const String & fileName, int exponent, MatrixInput<T> * oldHandle = 0);
+template<class T> SHARED HolderMatrix<T> * matrixHelper (const String & fileName, const String & key, const String & value, T emptyValue, int exponent, HolderMatrix<T> * oldHandle = 0);
 #else
-template<class T> SHARED MatrixInput<T> * matrixHelper (const String & fileName,               MatrixInput<T> * oldHandle = 0);
+template<class T> SHARED HolderMatrix<T> * matrixHelper (const String & fileName, const String & key, const String & value, T emptyValue,               HolderMatrix<T> * oldHandle = 0);
 #endif
 
 template<class T> SHARED IteratorNonzero<T> * getIterator (MatrixAbstract<T> * A);  // Returns an object that iterates over nonzero elements of A.
+
+#ifdef n2a_FP
+
+inline int
+convert (double input, int exponent)
+{
+    if (input == 0) return 0;
+    if (std::isnan (input)) return NAN;
+    bool negate = input < 0;
+    if (std::isinf (input))
+    {
+        if (negate) return -INFINITY;
+        return              INFINITY;
+    }
+
+    int64_t bits = (int64_t &) input;
+    int e = (int) ((bits >> 52) & 0x7FF) - 1023;
+    bits &= 0x0FFFFFFFFFFFFFl;  // clear sign and exponent bits
+    bits |= 0x10000000000000l;  // set implied msb of mantissa (bit 52) to 1
+    if (negate) bits = -bits;
+    int shift = 52 + exponent - e;
+    if (shift >= 0) return bits >> shift;
+    return bits << -shift;
+}
+
+inline int
+convert (float input, int exponent)
+{
+    if (input == 0) return 0;
+    if (std::isnan (input)) return NAN;
+    bool negate = input < 0;
+    if (std::isinf (input))
+    {
+        if (negate) return -INFINITY;
+        return              INFINITY;
+    }
+
+    int32_t bits = (int32_t &) input;
+    int e = ((bits >> 23) & 0xFF) - 127;
+    bits &= 0x7FFFFF;  // clear sign and exponent bits
+    bits |= 0x800000;  // set implied msb of mantissa (bit 23) to 1
+    if (negate) bits = -bits;
+    int shift = 23 + exponent - e;
+    if (shift >= 0) return bits >> shift;
+    return bits << -shift;
+}
+
+inline int
+convert (const String & input, int exponent)
+{
+    return convert (atof (input.c_str ()), exponent);
+}
+
+template<class T> SHARED Matrix<T> * loadNPY (std::istream & in,                       int exponent);
+template<class T> SHARED Matrix<T> * loadNPY (ZipFile & zip, const String & entryName, int exponent);
+
+#else
+
+template<class T> SHARED Matrix<T> * loadNPY (std::istream & in);
+template<class T> SHARED Matrix<T> * loadNPY (ZipFile & zip, const String & entryName);
+
+#endif  // n2a_FP
+
+/// Convert CSV data into sparse spike matrix.
+template<class T>
+struct ReadSonataSpikes : public ParseXSV
+{
+    MatrixSparse<T> * S;
+    String            population;  // name of population that is spiking
+    int               colTime;
+    int               colPopulation;
+    int               colID;
+    bool              gotColumns;
+    int               lastID;
+    int               eventCount;
+#   ifdef n2a_FP
+    int               exponent;
+#   endif
+
+    ReadSonataSpikes (const String & population);
+    virtual bool processLine (std::vector<String> & parts);
+};
+
+template<class T>
+struct SHARED Table : public HolderMatrix<T>
+{
+    std::mutex mutexAnchor;
+    T          emptyValue;
+
+    Table (const String & fileName, T emptyValue);
+
+    virtual void   parse         (const String & anchor);
+    virtual int    rows          () const = 0;
+    virtual int    columns       () const = 0;
+    virtual int    rowsInColumn  () const;
+    virtual int    columnsInRow  () const;
+    virtual int    columnIndex   (const String & columnName) = 0;
+    virtual int    rowIndex      (const int keyColumn, const String & keyValue) = 0;
+    virtual T      get           (const int row, const int column) const = 0;
+    virtual String getString     (const int row, const int column) const = 0;
+
+    // Functions that take anchor.
+    // These wrap the anchor setting and info retrieval in a critical section, so anchor is guaranteed to remain consistent.
+    int    rows         (const String & anchor);
+    int    columns      (const String & anchor);
+    int    rowsInColumn (const String & anchor);
+    int    columnsInRow (const String & anchor);
+    T      get          (const String & anchor, const int row, const int column);
+    String getString    (const String & anchor, const int row, const int column);
+};
+
+/**
+    Matrices which provide cell values for the entire sheet.
+    In general, a cell will either be a number, a string, or empty.
+    We don't know ahead of time whether the matrix is dense or sparse, so the
+    exact type of matrix is decided by the loader.
+**/
+template<class T>
+struct SHARED Sheet
+{
+    MatrixAbstract<T> *            numbers;   ///< Dense matrix stores empty cells and strings as 0. Sparse matrix does not store them at all.
+    MatrixAbstract<int> *          strings;   ///< 1-based indices into string collection. Empty cells and numbers are 0.
+    int                            rows;
+    int                            columns;
+    std::unordered_map<String,int> columnMap; ///< From header text to index. If empty, then there is no header row.
+    std::vector<int>               index;     ///< Array of row numbers, sorted according to key (specified elsewhere). If empty, then index needs to be built.
+
+    Sheet ();
+    ~Sheet ();
+};
+
+template<class T>
+struct SHARED TableSheet : public Table<T>
+{
+    std::vector<String>                 strings;  ///< collection of all strings that appear in the workbook
+    std::map<String,Sheet<T>*>          wb;       ///< workbook, a collection of worksheets
+    Sheet<T> *                          first;    ///< The first sheet defined in the file. This is the default when no sheet is specified in cell address.
+    String                              cell;     ///< The most recently parsed anchor cell address. Includes sheet name and coordinates.
+    Sheet<T> *                          ws;       ///< Anchor sheet
+    int                                 ar;       ///< Anchor row
+    int                                 ac;       ///< Anchor column
+#   ifdef n2a_FP
+    int                                 exponent;
+#   endif
+    std::map<String,MatrixAbstract<T>*> matrices; ///< Cache of matrices handed out by getMatrix(). See Mmatrix for comments about this field.
+
+    static constexpr double fillThreshold = 0.5;
+
+    TableSheet (const String & fileName, T emptyValue);
+    virtual ~TableSheet ();
+
+    void load      ();  ///< Triage file magic, than call appropriate loader.
+    void loadXSV   ();
+    void loadExcel ();
+
+    void parse   (const String & cell);       ///< Subroutine for all functions that take an anchor cell address.
+    void parseA1 (const String & coordinate); ///< Process just the coordinates of a cell address.
+
+    // These counts are always relative to an anchor cell.
+    virtual int    rows         () const;
+    virtual int    columns      () const;
+    virtual int    rowsInColumn () const;
+    virtual int    columnsInRow () const;
+    virtual int    columnIndex  (const String & columnName);
+    virtual int    rowIndex     (const int keyColumn, const String & keyValue);
+    virtual T      get          (const int row, const int column) const;
+    virtual String getString    (const int row, const int column) const;
+
+    using Table::rows;
+    using Table::columns;
+    using Table::rowsInColumn;
+    using Table::columnsInRow;
+    using Table::get;
+    using Table::getString;
+
+    virtual MatrixAbstract<T> * getMatrix (const char * resource = 0);  ///< @param resource A cell anchor, if appropriate.
+};
+
+#ifdef n2a_FP
+template<class T> extern SHARED TableSheet<T> * tableHelperSheet (const String & fileName, int exponent, TableSheet<T> * oldHandle = 0);
+#else
+template<class T> extern SHARED TableSheet<T> * tableHelperSheet (const String & fileName,               TableSheet<T> * oldHandle = 0);
+#endif
+
+template<class T>
+struct LoadTableXSV : public ParseXSV
+{
+    TableSheet<T> * table;
+    int             fillN;
+    int             fillS;
+#   ifdef n2a_FP
+    int             exponent;
+#   endif
+
+    LoadTableXSV ();
+    virtual bool processLine (std::vector<String> & parts);
+};
+
+/**
+    Similar to IteratorSparse, except that we handle a coordinate offset.
+**/
+template<class T>
+struct IteratorSparseRegion : public IteratorNonzero<T>
+{
+    MatrixSparseRegion<T> *            S;
+    typename std::map<int,T>::iterator it;      // current column iterator
+    typename std::map<int,T>::iterator end;     // of current column
+
+    IteratorSparseRegion (MatrixSparseRegion<T> * S);
+
+    virtual bool next ();
+};
+
+template<class T> struct InputXSV;
+
+/**
+    Special sparse matrix for SONATA edge lists, backed by XSV data.
+    See comments on class MatrixSonataEdgesHDF.
+**/
+template<class T>
+struct SHARED MatrixSonataEdgesXSV : public MatrixAbstract<T>
+{
+    InputXSV<T> *             input;     ///< Table that backs this object. We own it and manage its lifetime. It is not placed in Simulator::holders.
+    bool                      haveColumns;
+
+    // Data for main iterator.
+    uint64_t                  row;       ///< Next position of sparse iterator.
+    int                       colSource;
+    int                       colTarget;
+
+    // Data for attributes that track main iterator.
+    MatrixSonataEdgesXSV<T> * track;
+    String                    attribute;
+    int                       colAttribute;
+    T                         emptyValue;
+    T                         tempResult;
+
+#   ifdef n2a_FP
+    MatrixSonataEdgesXSV (const String & fileName, const String & attribute, T emptyValue, int exponent);
+#   else
+    MatrixSonataEdgesXSV (const String & fileName, const String & attribute, T emptyValue);
+#   endif
+    ~MatrixSonataEdgesXSV ();
+    virtual uint32_t classID () const;
+
+    virtual T   get         (const int row, const int column = 0) const;
+    virtual T & operator () (const int row, const int column = 0) const;
+    virtual int rows        () const;
+    virtual int columns     () const;
+};
+
+template<class T>
+struct SHARED IteratorSonataEdgesXSV : public IteratorNonzero<T>
+{
+    MatrixSonataEdgesXSV<T> & A;
+
+    IteratorSonataEdgesXSV (MatrixSonataEdgesXSV<T> * A);
+
+    virtual bool next ();
+};
+
+#ifdef HAVE_HDF
+
+struct SHARED SubHolderHDF
+{
+    String     fileName;  ///< To retrieve record in "files".
+    H5::H5File file;
+    int        users;
+    std::mutex mutexFile;  ///< Serialize access to a given open file, since HDF is not thread-safe.
+
+    static std::map<String,SubHolderHDF*> files;  ///< Keep track of all open HDF files in the app (regardless of which simulation they belong to). These can be shared by multiple InputHDF objects.
+    static std::mutex                     mutexFiles;
+
+    SubHolderHDF (const String & fileName);
+    static SubHolderHDF * allocate (const String & fileName);  ///< Returns pointer to sub-holder, or null if file can't be opened.
+    void allocate ();  ///< Increment reference count.
+    void release ();  ///< Decrement reference count. When last reference is released, destroys the sub-holder and removes it from "files".
+};
+
+template<class T>
+struct SHARED TableHDF : public Table<T>, public MatrixAbstract<T>
+{
+    SubHolderHDF *                 sub;
+    String                         resource;         ///< Path to resource inside HDF file.
+    bool                           rootIsGroup;      ///< Root can be either a Dataset or a Group. This indicates which one.
+    H5::Group                      rootGroup;
+    H5::DataSet                    rootDataSet;
+    H5::Group                      sonataPopulation; ///< Population node, for finding related resources. INVALID_HID if not a SONATA file.
+    bool                           sonataEdges;      ///< root is an attribute associated with a SONATA style sparse edge list.
+    bool                           sonataSpikes;     ///< root is a group that contains SONATA style input spikes.
+    std::vector<hsize_t>           dims;             ///< Size of data. Gets modified to always be 2D.
+    int                            dimCount;         ///< Original length of "dims"
+    std::unordered_map<String,int> rowMap;
+    std::unordered_map<String,int> columnMap;
+    std::vector<String>            headers;          ///< The inverse of columnMap
+    hsize_t *                      start;            ///< For accessing data. This avoids recreating the object every time.
+    hsize_t *                      count;            ///< see "start"
+    T                              tempResult;       ///< To fake a reference in operator().
+#   ifdef n2a_FP
+    int                            exponent;
+#   endif
+    MatrixAbstract<T> *            A;                ///< Matrix handed out by getMatrix(). That function ignores the resource parameter, so there is only one per TableHDF instance.
+
+    static const int chunkSize = 1000000;
+
+    /**
+        @param fileName To the HDF file. Not the same as the key for looking Holder. Specifically, the
+        holder key includes both HDF file path and path to resource inside HDF file. Here, we are only
+        interested in the actual path to file, so we can keep track of how many holders are using the file.
+        @param resource To the resource inside the HDF file.
+    **/
+    TableHDF (const String & filePath, const String & resource, T emptyValue);
+    virtual ~TableHDF ();
+    virtual uint32_t classID () const;
+
+    virtual int    rows        () const;
+    virtual int    columns     () const;
+    virtual int    columnIndex (const String & columnName);
+    virtual int    rowIndex    (int keyColumn, const String & keyValue);
+    virtual T      get         (const int row, const int column) const;
+    virtual String getString   (const int row, const int column) const;
+    virtual T &    operator () (const int row, const int column) const;  ///< Thin wrapper around get(), just to satisfy the Matrix interface. Doesn't actually allow writing of elements.
+
+    using Table::rows;
+    using Table::columns;
+    using Table::rowsInColumn;
+    using Table::columnsInRow;
+    using Table::get;
+    using Table::getString;
+
+    virtual MatrixAbstract<T> * getMatrix (const char * resource = 0);  ///< @param resource Ignored
+};
+
+#ifdef n2a_FP
+template<class T> extern SHARED TableHDF<T> * tableHelperHDF (const String & fileName, const String & resource, int exponent, TableHDF<T> * oldHandle = 0);
+#else
+template<class T> extern SHARED TableHDF<T> * tableHelperHDF (const String & fileName, const String & resource,               TableHDF<T> * oldHandle = 0);
+#endif
+
+template<class T>
+struct SHARED IteratorNonzeroHDF : public IteratorNonzero<T>
+{
+    TableHDF<T> *  table;
+    std::vector<T> chunk;     ///< Buffered 2D chunk, row major, covering whole rows.
+    hsize_t        start[2]; ///< Coordinates for current region in "data".
+    hsize_t        count[2];
+
+    IteratorNonzeroHDF (TableHDF<T> * table);
+
+    virtual bool next ();
+};
+
+template<class T>
+struct SHARED MatrixSonataEdgesHDF : public MatrixAbstract<T>
+{
+    TableHDF<T> *             table;
+    hsize_t                   start;     ///< For current block of data.
+    hsize_t                   count;
+
+    // Data for matrix that backs the sparse iterator.
+    H5::DataSet               datasetSource;
+    H5::DataSet               datasetTarget;
+    uint64_t                  rowCount;
+    uint64_t                  row;       ///< Current position of sparse iterator. Initially at max value, so it rolls over to 0 on first increment.
+
+    // Data for attribute matrix that tracks the iterator.
+    MatrixSonataEdgesHDF<T> * track;  // For attribute matrices, this refers to the matrix backing the sparse iterator which we are tracking.
+    H5::DataSet               datasetAttribute;
+    std::vector<T>            chunkAttribute;
+    T                         tempResult;
+#   ifdef n2a_FP
+    int                       exponent;
+#   endif
+
+    /**
+        @param key Combined file name and resource name inside the HDF file.
+        The name of the main iterator will be derived by popping the last element off the resource name.
+    **/
+    MatrixSonataEdgesHDF (TableHDF<T> * table);
+    virtual uint32_t classID () const;
+
+    virtual T   get         (const int row, const int column = 0) const;
+    virtual T & operator () (const int row, const int column = 0) const;
+    virtual int rows        () const;
+    virtual int columns     () const;
+};
+
+template<class T>
+struct IteratorSonataEdgesHDF : public IteratorNonzero<T>
+{
+    MatrixSonataEdgesHDF<T> & A;
+    std::vector<uint64_t>     chunkSource;
+    std::vector<uint64_t>     chunkTarget;
+
+    IteratorSonataEdgesHDF (MatrixSonataEdgesHDF<T> * A);
+
+    virtual bool next ();
+};
+
+template<class T>
+struct SHARED MatrixSonataSpikesHDF : public MatrixAbstract<T>
+{
+    TableHDF<T> *         table;
+    H5::DataSet           datasetTime;
+    std::vector<uint64_t> columnIDs;
+    std::vector<uint64_t> columnPointers;
+    uint64_t              rows_;  // Tallest column seen.
+    T                     tempResult;
+
+    MatrixSonataSpikesHDF (TableHDF<T> * table);
+    virtual uint32_t classID () const;
+
+    virtual T   get         (const int row, const int column = 0) const;
+    virtual T & operator () (const int row, const int column = 0) const;
+    virtual int rows        () const;
+    virtual int columns     () const;
+};
+
+#endif
 
 template<class T>
 struct SHARED ImageInput : public Holder
@@ -302,9 +830,9 @@ struct SHARED ImageOutput : public Holder
     T drawSquare  (T now, bool raw, const MatrixFixed<T,3,1> & center, T w, T h,                               int exponent, uint32_t color);
     T drawSegment (T now, bool raw, const MatrixFixed<T,3,1> & p1, const MatrixFixed<T,3,1> & p2, T thickness, int exponent, uint32_t color);
 #   else
-    T drawDisc    (T now, bool raw, const MatrixFixed<T,3,1> & center, T radius,                               uint32_t color);
-    T drawSquare  (T now, bool raw, const MatrixFixed<T,3,1> & center, T w, T h,                               uint32_t color);
-    T drawSegment (T now, bool raw, const MatrixFixed<T,3,1> & p1, const MatrixFixed<T,3,1> & p2, T thickness, uint32_t color);
+    T drawDisc    (T now, bool raw, const MatrixFixed<T,3,1> & center, T radius,                                             uint32_t color);
+    T drawSquare  (T now, bool raw, const MatrixFixed<T,3,1> & center, T w, T h,                                             uint32_t color);
+    T drawSegment (T now, bool raw, const MatrixFixed<T,3,1> & p1, const MatrixFixed<T,3,1> & p2, T thickness,               uint32_t color);
 #   endif
     void writeImage ();
 
@@ -411,9 +939,8 @@ struct SHARED InputXSV : public InputHolder<T>
 #   endif
 
     std::istream *            in;
-    char                      delimiter;
-    bool                      delimiterSet;
-    bool                      firstRow;
+    ParseXSV                  parser;
+    std::vector<String>       parts;
     std::list<InputLine<T> *> buffer;
 
     InputXSV (const String & fileName);
@@ -436,24 +963,12 @@ struct SHARED InputXSV : public InputHolder<T>
     void release ();
 };
 #ifdef n2a_FP
-template<class T> SHARED InputXSV<T> * xsvHelper (const String & fileName, int exponent, int exponentRow, InputXSV<T> * oldHandle = 0);
+template<class T> SHARED InputXSV<T> * inputHelperXSV (const String & fileName, int exponent, int exponentRow, InputXSV<T> * oldHandle = 0);
 #else
-template<class T> SHARED InputXSV<T> * xsvHelper (const String & fileName,                                InputXSV<T> * oldHandle = 0);
+template<class T> SHARED InputXSV<T> * inputHelperXSV (const String & fileName,                                InputXSV<T> * oldHandle = 0);
 #endif
 
 #ifdef HAVE_HDF
-
-struct SHARED SubHolder
-{
-    H5::H5File file;
-    int        users;
-    std::mutex mutexFile;  ///< Serialize access to a given open file, since HDF is not thread-safe.
-
-    static std::map<String,SubHolder*> files;  ///< Keep track of all open HDF files in the app (regardless of which simulation they belong to). These can be shared by multiple InputHDF objects.
-    static std::mutex                  mutexFiles;
-
-    SubHolder (const String & fileName);
-};
 
 template<class T>
 struct SHARED InputHDF : public InputHolder<T>
@@ -468,22 +983,26 @@ struct SHARED InputHDF : public InputHolder<T>
     using InputHolder<T>::time;
     using InputHolder<T>::smooth;
     using InputHolder<T>::epsilon;
+#   ifdef n2a_FP
+    using InputHolder<T>::exponent;
+    using InputHolder<T>::exponentRow;
+#   endif
 
-    String      path;
-    SubHolder * sub;
-    H5::DataSet data;
-    bool        warning;
-    bool        nwb;
-    int         rowCount;
-    T           startingTime;
-    T           period;
-    T *         timestamps;  // If null, use startingTime+N*period. If non-null, treat this as time column.
-    int         lastRow;     // When using timestamps, where to start search.
-    int         rank;
-    hsize_t *   start;       // For accessing data. This avoids recreating the object every time.
-    hsize_t *   count;       // ditto
+    String         resource;
+    SubHolderHDF * sub;
+    H5::DataSet    data;
+    bool           warning;
+    bool           nwb;
+    int            rowCount;
+    T              startingTime;
+    T              period;
+    T *            timestamps;  // If null, use startingTime+N*period. If non-null, treat this as time column.
+    int            lastRow;     // When using timestamps, where to start search.
+    int            dimCount;
+    hsize_t *      start;       // For accessing data. This avoids recreating the object every time.
+    hsize_t *      count;       // ditto
 
-    InputHDF (const String & fileName, const String & path);
+    InputHDF (const String & fileName, const String & resource);
     virtual ~InputHDF ();
 
     virtual void getRow  (T row);
@@ -493,9 +1012,9 @@ struct SHARED InputHDF : public InputHolder<T>
 };
 
 #ifdef n2a_FP
-template<class T> SHARED InputHDF<T> * hdfHelper (const String & fileName, const String & path, int exponent, int exponentRow, InputHDF<T> * oldHandle = 0);
+template<class T> SHARED InputHDF<T> * inputHelperHDF (const String & fileName, const String & path, int exponent, int exponentRow, InputHDF<T> * oldHandle = 0);
 #else
-template<class T> SHARED InputHDF<T> * hdfHelper (const String & fileName, const String & path,                                InputHDF<T> * oldHandle = 0);
+template<class T> SHARED InputHDF<T> * inputHelperHDF (const String & fileName, const String & path,                                InputHDF<T> * oldHandle = 0);
 #endif
 
 #endif  // HAVE_HDF

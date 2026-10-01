@@ -1,5 +1,5 @@
 /*
-Copyright 2018-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2018-2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -62,6 +62,7 @@ import gov.sandia.n2a.language.operator.Power;
 import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Matrix;
 import gov.sandia.n2a.language.type.Scalar;
+import gov.sandia.n2a.language.type.Text;
 
 public class RendererCfp extends RendererC
 {
@@ -373,16 +374,18 @@ public class RendererCfp extends RendererC
         {
             AccessVariable av = (AccessVariable) op;
             Type type = av.getType ();
-            boolean isMatrix   = type instanceof Matrix;
-            boolean isInstance = type instanceof Instance;
+            boolean isMatrix    = type instanceof Matrix;
+            boolean isInstance  = type instanceof Instance;
+            boolean isText      = type instanceof Text;
+            boolean isNumerical = ! isInstance  &&  ! isText;
             int shift = av.exponent - av.exponentNext;
-            if (shift != 0  &&  ! isInstance)
+            if (shift != 0  &&  isNumerical)
             {
                 if (isMatrix) result.append ("shift ");
                 result.append ("(");
             }
             result.append (job.resolve (av.reference, this, false));
-            if (useExponent  &&  shift != 0  &&  ! isInstance)
+            if (shift != 0  &&  isNumerical)
             {
                 if (isMatrix) result.append (", " + shift);
                 else          result.append (printShift (shift));
@@ -658,8 +661,8 @@ public class RendererCfp extends RendererC
 
         long bits = Double.doubleToLongBits (d);
         int  e    = Math.getExponent (d);
+        bits &= 0x0FFFFFFFFFFFFFl;  // clear sign and exponent bits
         bits |= 0x10000000000000l;  // set implied msb of mantissa (bit 52) to 1
-        bits &= 0x1FFFFFFFFFFFFFl;  // clear sign and exponent bits
         if (negate) bits = -bits;
         bits >>= 52 + exponent - e;
         return Integer.toString ((int) bits);

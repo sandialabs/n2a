@@ -1,5 +1,5 @@
 /*
-Copyright 2017 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -64,7 +64,7 @@ public class SafeTextTransferHandler extends TransferHandler
                 try (BufferedReader br = new BufferedReader (new StringReader (data)))
                 {
                     Schema schema = Schema.read (br);
-                    if (! schema.type.startsWith ("Clip")  &&  ! safeTypes.contains (schema.type)) return false;
+                    if (schema == null  ||  ! schema.type.startsWith ("Clip")  &&  ! safeTypes.contains (schema.type)) return false;
                     MNode nodes = new MVolatile ();
                     schema.read (nodes, br);
 

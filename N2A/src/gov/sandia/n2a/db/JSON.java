@@ -1,5 +1,5 @@
 /*
-Copyright 2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2024-2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -21,21 +21,22 @@ import java.io.Writer;
     be a proper child. This is such a rare case that it is a reasonable tradeoff
     to get richer representation of MNode.
 
-    The parser implemented here has a few extensions to let it handle Python dictionaries:
+    The parser implemented here has a few extensions to let it handle Python dictionaries in string form:
     * Treats single quote as valid start character for a string. In that case, a
       double quote can appear inside the string.
     * Treats parentheses as start character for an array. Tuples get read in as a map
       from position index (zero-based) to value.
     * true and false can start with capital letters.
-    The writer is strictly JSON compliant.
-
-    The calls on this class are similar to Schema. However, this class doesn't
-    deal with a file magic string or schema versioning. Thus, it doesn't really
-    belong in the Schema hierarchy.
+    The writer, OTOH, is strictly JSON compliant.
 **/
-public class JSON
+public class JSON extends Schema
 {
     public String tab = "  ";
+
+    public JSON ()
+    {
+        super (-1, "JSON");
+    }
 
     public void read (MNode node, Reader reader) throws IOException
     {
@@ -205,6 +206,23 @@ public class JSON
             MNode child = node.childOrCreate (String.valueOf (key));
             read (child, reader);
         }
+    }
+
+    /**
+        For consistency with Schema, we treat this as a request to write just the
+        children of the node. To save "node" itself, along with its children,
+        start instead with a call to write(MNode,Writer).
+    **/
+    public void writeAll (MNode node, Writer writer) throws IOException
+    {
+        writer.append ("{\n");
+        writeChildren (node, writer, tab);
+        writer.append ("\n}");
+    }
+
+    public void write (Writer writer) throws IOException
+    {
+        // JSON doesn't have a magic identifier, so don't write anything to file.
     }
 
     /**

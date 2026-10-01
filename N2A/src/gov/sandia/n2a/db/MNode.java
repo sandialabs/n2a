@@ -1,11 +1,12 @@
 /*
-Copyright 2016-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2016-2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
 
 package gov.sandia.n2a.db;
 
+import java.io.IOException;
 import java.io.StringWriter;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -914,7 +915,8 @@ public class MNode implements Iterable<MNode>, Comparable<MNode>
     public String toString ()
     {
         StringWriter writer = new StringWriter ();
-        Schema.latest ().write (this, writer);
+        try {Schema.latest ().write (this, writer);}
+        catch (IOException e) {}
         return writer.toString ();
     }
 }

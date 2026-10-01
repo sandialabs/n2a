@@ -5,7 +5,7 @@ Copyright (c) 2001-2004 Dept. of Computer Science and Beckman Institute,
 Distributed under the UIUC/NCSA Open Source License.
 
 
-Copyright 2005-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2005-2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -29,10 +29,16 @@ the U.S. Government retains certain rights in this software.
 
 // Matrix class ID constants
 // This is a hack to avoid the cost of RTTI.
-#define MatrixStridedID   0x1
-#define MatrixID          0x2
-#define MatrixFixedID     0x4
-#define MatrixSparseID    0x8
+#define MatrixStridedID          0x001
+#define MatrixID                 0x002
+#define MatrixFixedID            0x004
+#define MatrixSparseID           0x008
+#define MatrixSparseRegionID     0x010
+//   Specialty matrices, used by IO system.
+#define TableHDF_ID              0x020
+#define MatrixSonataEdgesXSV_ID  0x040
+#define MatrixSonataEdgesHDF_ID  0x080
+#define MatrixSonataSpikesHDF_ID 0x100
 
 
 // Matrix general interface -------------------------------------------------
@@ -43,9 +49,8 @@ the U.S. Government retains certain rights in this software.
     matrices are the most common case.
 **/
 template<class T>
-class SHARED MatrixAbstract
+struct SHARED MatrixAbstract
 {
-public:
     virtual ~MatrixAbstract () = 0;
     virtual uint32_t classID () const = 0;  ///< @return A bitvector indicating all the classes to which this object can be cast.  Hack to avoid the cost of dynamic_cast.
 
@@ -142,9 +147,8 @@ SHARED Matrix<int> shift (const MatrixAbstract<int> & A, int shift);  // Defined
     address and row and column stride.
 **/
 template<class T>
-class SHARED MatrixStrided : public MatrixAbstract<T>
+struct SHARED MatrixStrided : public MatrixAbstract<T>
 {
-public:
     virtual T * base    () const = 0; ///< Address of first element.
     virtual int strideR () const = 0; ///< Number of elements between start of each row in memory.
     virtual int strideC () const = 0; ///< Number of elements between start of each column in memory. Equivalent to "leading dimension" in LAPACK parlance.
@@ -171,7 +175,7 @@ template<class T> SHARED Matrix<T> operator - (const T scalar,             const
 
 #ifdef n2a_FP
 // Fixed-point operations on MatrixStrided<int>
-// These are not templates. Their implementations are in fixedpoint.cc
+// These are explicit specializations, not generic templates. Their implementations are in fixedpoint.cc
 SHARED void        identity            (const MatrixStrided<int> & A, int one);  // "one" is passed explicitly, already scaled with the right exponent
 SHARED int         norm                (const MatrixStrided<int> & A, int n, int exponentA, int exponentResult); // exponentN=-MSB/2
 SHARED Matrix<int> normalize           (const MatrixStrided<int> & A,        int exponentA);                     // result has exponent=-MSB
@@ -190,9 +194,8 @@ SHARED Matrix<int> divide              (int a,                        const Matr
 #endif
 
 template<class T>
-class SHARED Matrix : public MatrixStrided<T>
+struct SHARED Matrix : public MatrixStrided<T>
 {
-public:
     n2a::Pointer data;
     int offset;
     int rows_;
@@ -263,13 +266,13 @@ public:
 template<class T> SHARED Matrix<T> operator ~ (const Matrix<T> & A);
 template<class T> SHARED Matrix<T> row        (const Matrix<T> & A, int row);
 template<class T> SHARED Matrix<T> column     (const Matrix<T> & A, int column);
+template<class T> SHARED Matrix<T> region     (const Matrix<T> & A, int firstRow, int firstColumn, int lastRow = -1, int lastColumn = -1);
 
 // MatrixFixed and its associated functions are not SHARED, because there's no
 // way to predict which instantiations will be used by which modules.
 template<class T, int R, int C>
-class MatrixFixed : public MatrixStrided<T>
+struct MatrixFixed : public MatrixStrided<T>
 {
-public:
     T data[C][R];
 
     MatrixFixed ();
@@ -372,22 +375,42 @@ template<int R, int C>        MatrixFixed<int,R,C> divide              (int a,  
     holding the column structures would be better.
 **/
 template<class T>
-class SHARED MatrixSparse : public MatrixAbstract<T>
+struct SHARED MatrixSparse : public MatrixAbstract<T>
 {
-public:
-    int rows_;
+    int                                           rows_;
     std::shared_ptr<std::vector<std::map<int,T>>> data;
+    T                                             emptyValue;
 
     MatrixSparse ();
     MatrixSparse (const int rows, const int columns);
     MatrixSparse (const MatrixAbstract<T> & that);
     virtual uint32_t classID () const;
 
-    void        set         (const int row, const int column, const T value);  ///< If value is non-zero, creates element if not already there; if value is zero, removes element if it exists.
-    virtual T   get         (const int row, const int column = 0) const {return operator() (row, column);}
-    virtual T & operator () (const int row, const int column = 0) const;       ///< If element does not exist, this returns a dummy element. Assigning to it will have no effect. Elements must be created with set().
-    virtual int rows        () const;
-    virtual int columns     () const;
+    virtual void set         (const int row, const int column, const T value);  ///< If value is non-zero, creates element if not already there; if value is zero, removes element if it exists.
+    virtual T    get         (const int row, const int column = 0) const {return operator() (row, column);}
+    virtual T &  operator () (const int row, const int column = 0) const;       ///< If element does not exist, this returns a reference to emptyValue. This should not be assigned to. Elements must be created with set().
+    virtual int  rows        () const;
+    virtual int  columns     () const;
+};
+
+/**
+    Variant of MatrixSparse that includes a coordinate offset.
+    Changes to this matrix will be visible in the original sparse matrix.
+    However, the original matrix will not report any change in number of rows.
+**/
+template<class T>
+struct SHARED MatrixSparseRegion : public MatrixSparse<T>
+{
+    int ar;       ///< anchor row
+    int ac;       ///< anchor column
+    int columns_; ///< limit the reported number of columns, regardless of the underlying data
+
+    MatrixSparseRegion (MatrixSparse<T> & that, int firstRow, int firstColumn, int lastRow = -1, int lastColumn = -1);
+    virtual uint32_t classID () const;
+
+    virtual void set         (const int row, const int column, const T value);
+    virtual T &  operator () (const int row, const int column = 0) const;
+    virtual int  columns     () const;
 };
 
 

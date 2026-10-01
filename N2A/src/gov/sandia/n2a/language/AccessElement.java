@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -111,14 +111,11 @@ public class AccessElement extends Function implements NonzeroIterable
 
     public void determineExponent (ExponentContext context)
     {
-        Operator v = operands[0];
-        v.determineExponent (context);
-        updateExponent (context, v.exponent, v.center);
+        for (int i = 0; i < operands.length; i++) operands[i].determineExponent (context);
 
-        for (int i = 1; i < operands.length; i++)
-        {
-            operands[i].determineExponent (context);
-        }
+        // Set our own exponent to match the matrix we are accessing.
+        Operator v = operands[0];
+        updateExponent (context, v.exponent, v.center);
     }
 
     public void determineExponentNext ()

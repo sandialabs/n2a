@@ -1,5 +1,5 @@
 /*
-Copyright 2018-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2018-2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -226,10 +226,10 @@ struct String    // Note the initial capital letter. This name will not conflict
 
     char *    memory;
     char *    top;       // position of null terminator in memory block
-    size_type capacity_; // size of currently-allocated memory block
+    size_type capacity_; // size of currently-allocated memory block, including null termination beyond the end of the string.
 
     static const size_type npos    = static_cast<size_type> (-1);
-    static const size_type maxSize = 0x1000000;  // 16MiB. This is suitable for most systems.
+    static const size_type maxSize = 0x40000000;  // 1GiB. This is just a defensive measure. String gets used for loading raw files, potentially large.
 
     String ()
     {
@@ -265,6 +265,8 @@ struct String    // Note the initial capital letter. This name will not conflict
         that.top       = 0;
         that.capacity_ = 0;
     }
+
+    // String (size_type n, char c = 0) -- This constructor is not available, because it is ambiguous with direct number conversions below ...
 
     /**
         This constructor allows numbers to be passed as string arguments without extra conversion code.
@@ -381,12 +383,18 @@ struct String    // Note the initial capital letter. This name will not conflict
         size_type length = top - memory;
         reserve (n);
         top = memory + n;
-        memory[n] = 0;
         char * m = memory + length;
         while (m < top) *m++ = c;
+        memory[n] = 0;
     }
 
     const char * c_str () const
+    {
+        if (memory) return memory;
+        return "";
+    }
+
+    const char * data () const
     {
         if (memory) return memory;
         return "";
@@ -773,7 +781,7 @@ struct String    // Note the initial capital letter. This name will not conflict
     }
 
     /**
-        Replace all occurrences of a with b.
+        Returns a new string where all occurrences of "a" are replaced with "b".
     **/
     String replace_all (const String & a, const String & b)
     {
@@ -859,6 +867,27 @@ struct String    // Note the initial capital letter. This name will not conflict
 
 #ifndef N2A_SPINNAKER   // This only covers IO functions. There are other functions below that still get defined.
 
+/**
+    Use this class to construct the equivalent of istringstream. Example:
+
+    String bob = "some text";
+    StringStreambuf buf (bob);
+    istream stream (&buf);
+    do stuff with stream
+    and everything disposed at end of block, due to RAII.
+
+    This is currently only suitable for a quick-and-dirty input stream.
+    An output stream requires more careful interaction with String.
+**/
+struct StringStreambuf : public std::streambuf
+{
+    StringStreambuf (String & buffer)
+    {
+        char * b = (char *) buffer.data ();
+        setg (b, b, b + buffer.size ());
+    }
+};
+
 inline std::ostream & operator<< (std::ostream & out, const String & value)
 {
     if (value.memory) out << value.memory;
@@ -874,7 +903,7 @@ inline std::istream & getline (std::istream & in, String & result, char delimite
     char * b   = buffer;
     std::streambuf * rdbuf = in.rdbuf ();
     int c = rdbuf->sgetc ();
-    while (c != delimiter  &&  c >= 0)  // The last test is for EOF
+    while (c != delimiter  &&  c >= 0)  // The second test is for EOF
     {
         *b++ = c;
         if (b == top)

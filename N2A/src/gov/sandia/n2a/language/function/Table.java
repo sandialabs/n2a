@@ -7,6 +7,7 @@ the U.S. Government retains certain rights in this software.
 package gov.sandia.n2a.language.function;
 
 import java.io.BufferedReader;
+import java.io.FileInputStream;
 import java.io.PrintStream;
 import java.math.BigInteger;
 import java.nio.file.Files;
@@ -30,16 +31,20 @@ import org.w3c.dom.NamedNodeMap;
 import gov.sandia.n2a.backend.internal.Simulator;
 import gov.sandia.n2a.backend.neuroml.XMLutility;
 import gov.sandia.n2a.eqset.EquationSet.ExponentContext;
+import gov.sandia.n2a.eqset.EquationSet.NonzeroIterable;
+import gov.sandia.n2a.language.Constant;
 import gov.sandia.n2a.language.Function;
 import gov.sandia.n2a.language.Operator;
 import gov.sandia.n2a.language.Type;
 import gov.sandia.n2a.language.function.Input.SubHolderHDF;
 import gov.sandia.n2a.language.type.Instance;
 import gov.sandia.n2a.language.type.Matrix;
+import gov.sandia.n2a.language.type.Matrix.IteratorNonzero;
 import gov.sandia.n2a.language.type.Scalar;
 import gov.sandia.n2a.language.type.Text;
 import gov.sandia.n2a.linear.MatrixDense;
 import gov.sandia.n2a.linear.MatrixSparse;
+import gov.sandia.n2a.linear.MatrixSparse.IteratorSparse;
 import gov.sandia.n2a.plugins.extpoints.Backend;
 import gov.sandia.n2a.plugins.extpoints.Backend.AbortRun;
 import gov.sandia.n2a.util.ParseXSV;
@@ -47,7 +52,7 @@ import io.jhdf.api.Dataset;
 import io.jhdf.api.Group;
 import tech.units.indriya.AbstractUnit;
 
-public class Table extends Function
+public class Table extends Function implements NonzeroIterable
 {
     public String name;     // For C backend, the name of the holder object.
     public String fileName; // For C backend, the name of the string variable holding the file name, if any.
@@ -80,7 +85,11 @@ public class Table extends Function
 
     public void determineExponent (ExponentContext context)
     {
-        for (int i = 0; i < operands.length; i++) operands[i].determineExponent (context);
+        for (Operator op : operands) op.determineExponent (context);
+        if (keywords != null)
+        {
+            for (Operator k : keywords.values ()) k.determineExponent (context);
+        }
 
         if (getKeyword ("info") == null)  // normal mode. This includes string mode. In that case we don't care about exponent.
         {
@@ -95,13 +104,24 @@ public class Table extends Function
         }
     }
 
-    public void determineExponentNext (ExponentContext context)
+    public void determineExponentNext ()
     {
-        for (int i = 0; i < operands.length; i++)
+        for (Operator op : operands)
         {
-            Operator op = operands[i];
-            op.exponentNext = MSB;  // We expect an integer for index parameters. String parameters don't care.
+            // If it is a string, let it do its own thing. If it is a number, force it to be integer.
+            if (op.getType () instanceof Text) op.exponentNext = op.exponent;
+            else                               op.exponentNext = 0;
             op.determineExponentNext ();
+        }
+
+        if (keywords != null)
+        {
+            // All keywords are strings, possibly calculated.
+            for (Operator k : keywords.values ())
+            {
+                k.exponentNext = k.exponent;
+                k.determineExponentNext ();
+            }
         }
     }
 
@@ -135,12 +155,13 @@ public class Table extends Function
             throw new AbortRun ("rowsInColumn keyword is not supported for given file type");
         }
 
-        public int    rows ();
-        public int    columns ();
-        public int    getColumnIndex (String columnName);
-        public int    getRowIndex (int columnIndex, Object columnValue);
-        public double getDouble (double row, double column);
-        public String getString (int    row, int    column);
+        public int             rows ();
+        public int             columns ();
+        public int             getColumnIndex (String columnName);
+        public int             getRowIndex (int columnIndex, Object columnValue);
+        public double          getDouble (int row, int column);
+        public String          getString (int row, int column);
+        public IteratorNonzero getIteratorNonzero ();
     }
 
     /**
@@ -150,7 +171,7 @@ public class Table extends Function
     **/
     public static class HolderHDF extends Matrix implements Holder, AutoCloseable
     {
-        protected Path                filePath;
+        protected SubHolderHDF        sub;
         protected io.jhdf.api.Node    root;             // Can be either a Dataset or a Group.
         protected Group               sonataPopulation; // Population node, for finding related resources. null if not a SONATA file.
         protected boolean             sonataEdges;      // root is an attribute associated with a SONATA style sparse edge list.
@@ -160,7 +181,6 @@ public class Table extends Function
         protected Map<String,Integer> rowMap;
         protected Map<String,Integer> columnMap;
         protected List<String>        headers;          // The inverse of columnMap
-        protected Matrix              sonataRaster;     // Spike array, pre-loaded. Assumes that input spike pattern is relatively small, so can easily fit in memory.
 
         public static final int chunkSize = 1000000;
 
@@ -170,10 +190,9 @@ public class Table extends Function
             interested in the actual path to file, so we can keep track of how many holders are using the file.
             @param resource To the resource inside the HDF file.
         **/
-        public HolderHDF (Path filePath, String resource)
+        public HolderHDF (String fileName, String resource)
         {
-            this.filePath = filePath;
-            SubHolderHDF sub = SubHolderHDF.allocate (filePath);
+            sub = SubHolderHDF.allocate (fileName);
             root = sub.file.getByPath (resource);
 
             // Detect SONATA data that requires special interpretation.
@@ -196,14 +215,14 @@ public class Table extends Function
                 switch (parents.get (1).getName ()) // Name of group that contains sonataPopulation.
                 {
                     // Do some extra verification.
-                    case "spikes":
-                        sonataSpikes = sonataPopulation.getChild ("node_ids") != null  &&  sonataPopulation.getChild ("timestamps") != null;
-                        break;
                     case "edges":
                         sonataEdges = sonataPopulation.getChild ("source_node_id") != null  &&  sonataPopulation.getChild ("target_node_id") != null;
                         break;
+                    case "spikes":
+                        sonataSpikes = sonataPopulation.getChild ("node_ids") != null  &&  sonataPopulation.getChild ("timestamps") != null;
+                        break;
                 }
-                if (! sonataSpikes  &&  ! sonataEdges) sonataPopulation = null;
+                if (! sonataEdges  &&  ! sonataSpikes) sonataPopulation = null;
             }
 
             if (root.isGroup ())
@@ -242,7 +261,7 @@ public class Table extends Function
 
         public void close () throws Exception
         {
-            SubHolderHDF.release (filePath);
+            sub.release ();
         }
 
         public int rows ()
@@ -336,150 +355,39 @@ public class Table extends Function
             return result;
         }
 
-        public double getDouble (double row, double column)
+        public double getDouble (int row, int column)
         {
             if (sonataEdges  ||  sonataSpikes) throw new AbortRun ("Should access SONATA edges or spikes through matrix()");
 
-            // Bracket the source rows for an interpolated or extrapolated value.
-            int r = (int) row;
-            int r1 = r + 1;
-            if (r < 0) r = 0;
-            if (r1 >= dims[0]) r1 = dims[0] - 1;
-            if      (r1 < r) r1 = r;
-            else if (r > r1) r = r1;
-
-            // Bracket source columns.
-            // Some of this may be meaningless for named columns. We don't worry about that.
-            int c = (int) column;
-            int c1 = c + 1;
-            if (c < 0) c = 0;
-            if (c1 >= dims[1]) c1 = dims[1] - 1;
-            if      (c1 < c) c1 = c;
-            else if (c > c1) c = c1;
-
-            Dataset columnData;
+            if (row < 0  ||  row >= dims[0]  ||  column < 0  ||  column >= dims[1]) return 0;  // should be emptyValue
             long offset[] = new long[dimCount];
             int  count [] = new int [dimCount];
-            offset[0] = r;
-            count [0] =  r == r1 ? 1 : 2;
+            offset[0] = row;
+            count [0] = 1;
+            if (dimCount > 1)
+            {
+                offset[1] = column;
+                count [1] = 1;
+            }
+
+            Dataset columnData;
             if (root.isGroup ())
             {
-                String columnName = headers.get (c);
+                String columnName = headers.get (column);
                 columnData = ((Group) root).getDatasetByPath (columnName);
-                c1 = c;  // Don't do interpolation for named columns. The result will only be surprising if the user requests a column that is out of range.
             }
             else  // root is a Dataset
             {
                 columnData = (Dataset) root;
-                if (dimCount > 1)
-                {
-                    offset[1] = c;
-                    count [1] =  c == c1 ? 1 : 2;
-                }
             }
 
-            double d[][] = new double[2][2];
-            Object block = columnData.getData (offset, count);
+            Object result = columnData.getData (offset, count);
             Class<?> type = columnData.getJavaType ();
-            if (type == double.class)
-            {
-                if (dimCount == 1  ||  count[1] == 1)  // 1D
-                {
-                    double[] temp = (double[]) block;
-                    for (int i = 0; i < count[0]; i++) d[i][0] = temp[i];
-                }
-                else  // 2D
-                {
-                    double[][] temp = (double[][]) block;
-                    for (int i = 0; i < count[0]; i++)
-                    {
-                        for (int j = 0; j < count[1]; j++)
-                        {
-                            d[i][j] = temp[i][j];
-                        }
-                    }
-                }
-            }
-            else if (type == float.class)
-            {
-                if (dimCount == 1  ||  count[1] == 1)
-                {
-                    float[] temp = (float[]) block;
-                    for (int i = 0; i < count[0]; i++) d[i][0] = temp[i];
-                }
-                else
-                {
-                    float[][] temp = (float[][]) block;
-                    for (int i = 0; i < count[0]; i++)
-                    {
-                        for (int j = 0; j < count[1]; j++)
-                        {
-                            d[i][j] = temp[i][j];
-                        }
-                    }
-                }
-            }
-            else if (type == int.class)
-            {
-                if (dimCount == 1  ||  count[1] == 1)
-                {
-                    int[] temp = (int[]) block;
-                    for (int i = 0; i < count[0]; i++) d[i][0] = temp[i];
-                }
-                else
-                {
-                    int[][] temp = (int[][]) block;
-                    for (int i = 0; i < count[0]; i++)
-                    {
-                        for (int j = 0; j < count[1]; j++)
-                        {
-                            d[i][j] = temp[i][j];
-                        }
-                    }
-                }
-            }
-            else if (type == BigInteger.class)
-            {
-                if (dimCount == 1  ||  count[1] == 1)
-                {
-                    BigInteger[] temp = (BigInteger[]) block;
-                    for (int i = 0; i < count[0]; i++) d[i][0] = temp[i].doubleValue ();
-                }
-                else
-                {
-                    BigInteger[][] temp = (BigInteger[][]) block;
-                    for (int i = 0; i < count[0]; i++)
-                    {
-                        for (int j = 0; j < count[1]; j++)
-                        {
-                            d[i][j] = temp[i][j].doubleValue ();
-                        }
-                    }
-                }
-            }
-            else
-            {
-                throw new AbortRun ("Need code to handle numeric type: " + type.getSimpleName ());
-            }
-
-            if (c == c1)
-            {
-                if (r == r1) return d[0][0];
-
-                double a = row - r;
-                double a1 = 1 - a;
-                return a1 * d[0][0] + a * d[1][0];
-            }
-            else
-            {
-                double b = column - c;
-                double b1 = 1 - b;
-                if (r == r1) return b1 * d[0][0] + b * d[0][1];
-
-                double a = row - r;
-                double a1 = 1 - a;
-                return a1 * (b1 * d[0][0] + b * d[0][1]) + a * (b1 * d[1][0] + b * d[1][1]);  // full bilinear interpolation
-            }
+            if (type == double    .class) return ((double[])     result)[0];
+            if (type == float     .class) return ((float[])      result)[0];
+            if (type == int       .class) return ((int[])        result)[0];
+            if (type == BigInteger.class) return ((BigInteger[]) result)[0].doubleValue ();
+            throw new AbortRun ("Need code to handle numeric type: " + type.getSimpleName ());
         }
 
         public String getString (int row, int column)
@@ -491,7 +399,11 @@ public class Table extends Function
             int  count [] = new int [dimCount];
             offset[0] = row;
             count [0] = 1;
-            if (dimCount > 1) count[1] = 1;
+            if (dimCount > 1)
+            {
+                offset[1] = column;
+                count [1] = 1;
+            }
 
             Dataset columnData;
             if (root.isGroup ())
@@ -502,13 +414,15 @@ public class Table extends Function
             else  // root is a Dataset
             {
                 columnData = (Dataset) root;
-                if (dimCount > 1) count[1] = column;
             }
+
             Object result = columnData.getData (offset, count);
             Class<?> type = columnData.getJavaType ();
-            if (type == String.class) return ((String[]) result)[0];
-            if (type == double.class) return String.valueOf (((double[]) result)[0]);
-            if (type == float .class) return String.valueOf (((float []) result)[0]);
+            if (type == String    .class) return ((String[]) result)[0];
+            if (type == double    .class) return String.valueOf (((double[])     result)[0]);
+            if (type == float     .class) return String.valueOf (((float [])     result)[0]);
+            if (type == int       .class) return String.valueOf (((int[])        result)[0]);
+            if (type == BigInteger.class) return                 ((BigInteger[]) result)[0].toString ();
             throw new AbortRun ("getString() needs code for numeric type: " + type.getSimpleName ());
         }
 
@@ -530,8 +444,8 @@ public class Table extends Function
             If we construct a specialty matrix, that matrix is responsible to call allocate() and release().
 
             Cases:
-            * SONATA "spikes" list. "hdf" keyword points to the Group that holds the spike list (usually named after the population).
             * SONATA "edges" list. "hdf" keyword points to the primary attribute being iterated.
+            * SONATA "spikes" list. "hdf" keyword points to the Group that holds the spike list (usually named after the population).
             * Any 1D or 2D dataset.
             * Several parallel datasets under a group. Can either be SONATA attributes or any other data structured the same way.
 
@@ -539,12 +453,12 @@ public class Table extends Function
         **/
         public Matrix getMatrix ()
         {
-            if (sonataSpikes) return new MatrixSonataSpikesHDF (filePath, sonataPopulation);
-            if (sonataEdges)  return new MatrixSonataEdgesHDF  (filePath, sonataPopulation, root == sonataPopulation ? null : (Dataset) root);
+            if (sonataEdges)  return new MatrixSonataEdgesHDF  (sub, sonataPopulation, root == sonataPopulation ? null : (Dataset) root);
+            if (sonataSpikes) return new MatrixSonataSpikesHDF (sub, sonataPopulation);
 
             // * Any 1D or 2D dataset.
             // * Several parallel datasets under a group. Can either be SONATA attributes or any other data structured the same way.
-            SubHolderHDF.allocate (filePath);  // This Table.HolderHDF object will be closed upon return. Since we are returning ourselves as the matrix, we need to take out an additional allocation.
+            sub.allocate ();  // This Table.HolderHDF object will be closed upon return. Since we are returning ourselves as the matrix, we need to take out an additional allocation. The above SONATA matrices do an extra allocation in their ctor.
             return this;
         }
 
@@ -661,11 +575,6 @@ public class Table extends Function
         }
     }
 
-    public static class SharedRow
-    {
-        long row = -1;
-    }
-
     /**
         Special sparse matrix for SONATA edge lists, backed by HDF data.
         This returns a sparse iterator that simply reads through source and target node IDs serially.
@@ -678,54 +587,55 @@ public class Table extends Function
     **/
     public static class MatrixSonataEdgesHDF extends Matrix implements AutoCloseable
     {
-        protected Path      filePath;  // of HDF file, so it can be disposed when done.
-        protected Dataset   datasetSource;
-        protected Dataset   datasetTarget;
-        protected Dataset   datasetAttribute;
-        protected double[]  chunkAttribute;
-        protected Class<?>  type;
-        protected long      rowCount;
-        protected long[]    offset     = {-HolderHDF.chunkSize};  // For chunkAttribute. The iterator below has its own copy for the source and target node IDs.
-        protected int[]     count      = { HolderHDF.chunkSize};
-        protected double    emptyValue = 0;
-        protected SharedRow cached;
+        protected SubHolderHDF         sub;  // So it can be disposed when done.
+        protected long[]               offset = {-HolderHDF.chunkSize};  // For chunkAttribute. The iterator below has its own copy for the source and target node IDs.
+        protected int[]                count  = { HolderHDF.chunkSize};
 
-        public MatrixSonataEdgesHDF (Path filePath, Group population, Dataset attribute)
+        // Data for matrix that backs the sparse iterator.
+        protected Dataset              datasetSource;
+        protected Dataset              datasetTarget;
+        protected long                 rowCount;
+        protected long                 row = -1;
+
+        // Data for attribute matrix that tracks the iterator.
+        protected MatrixSonataEdgesHDF track;       // Reference to main matrix that backs the iterator. Allows access to shared variables listed above, particularly row and rowCount.
+        protected Dataset              datasetAttribute;
+        protected double[]             chunkAttribute;
+        protected Class<?>             type;
+        protected double               emptyValue;  // Initially zero
+
+        public MatrixSonataEdgesHDF (SubHolderHDF sub, Group population, Dataset attribute)
         {
-            this.filePath = filePath;
-            SubHolderHDF.allocate (filePath);
+            this.sub = sub;
+            sub.allocate ();
 
-            // Set up to share current row between iterator and other attribute matrices.
-            // This is somewhat of an abuse of the Simulator.holder system, but it is a
-            // simple way to guarantee that these resources are simulator-specific and
-            // will be disposed at the end.
-            String key = "$HDFrow";  // Unlikely to ever be a file name.
-            Simulator simulator = Simulator.instance.get ();
-            @SuppressWarnings("unchecked")
-            Map<String,SharedRow> cache1 = (Map<String,SharedRow>) simulator.holders.get (key);
-            if (cache1 == null)
+            if (attribute == null)  // The boolean connectivity itself. It will be the basis for a sparse iterator.
             {
-                cache1 = new HashMap<String,SharedRow> ();
-                simulator.holders.put (key, cache1);
+                datasetSource    = population.getDatasetByPath ("source_node_id");
+                datasetTarget    = population.getDatasetByPath ("target_node_id");
+                rowCount         = datasetTarget.getSize ();  // Should be same as datasetSource.size().
+                count[0]         = (int) Math.min (rowCount, (long) HolderHDF.chunkSize);
             }
-            String populationName = population.getName ();  // Name of the edge collection (distinct from source or target population.
-            cached = cache1.get (populationName);
-            if (cached == null)
+            else  // An attribute that tracks with the sparse iterator.
             {
-                cached = new SharedRow ();
-                cache1.put (populationName, cached);
-            }
+                datasetAttribute = attribute;
+                type             = attribute.getJavaType ();
 
-            datasetSource    = population.getDatasetByPath ("source_node_id");
-            datasetTarget    = population.getDatasetByPath ("target_node_id");
-            rowCount         = datasetTarget.getSize ();  // Should be same as datasetSource.size().
-            datasetAttribute = attribute;
-            if (attribute != null) type = attribute.getJavaType ();
+                // Locate the main iterator.
+                String populationPath = population.getPath ().substring (1);  // Skip leading slash in population resource path.
+                if (populationPath.endsWith ("/")) populationPath = populationPath.substring (0, populationPath.length () - 1);
+                String key = sub.fileName + "|" + populationPath;
+                track = (MatrixSonataEdgesHDF) Simulator.instance.get ().holders.get (key);
+                if (track == null) throw new AbortRun ("Attempt to create SONATA edge attribute matrix before sparse iterator is created.");
+
+                count[0] = track.count[0];  // local copy
+                chunkAttribute = new double[count[0]];
+            }
         }
 
         public void close () throws Exception
         {
-            SubHolderHDF.release (filePath);
+            sub.release ();
         }
 
         public int rows ()
@@ -743,6 +653,8 @@ public class Table extends Function
         **/
         public double get (int row, int column)
         {
+            if (datasetAttribute == null) return 1;  // If attribute is absent, we assume boolean matrix. In that case, always return 1, because this function should only be called for existent elements.
+
             // Blindly assume that the shared row is correct.
             // The alternative is to read back source and target IDs to verify they match row and column.
             // This version assumes no retrograde movement through edges. If there are multiple threads
@@ -754,17 +666,39 @@ public class Table extends Function
             // * There is an associated iterator. -- chunkAttribute will be kept up to date by the iterator.
             // * Otherwise -- We load chunkAttribute here. This should stay in sync with the iterator,
             //                but that is not strictly necessary.
-            if (datasetAttribute == null) return 1;  // If attribute is absent, we assume boolean matrix. In that case, always return 1, because this function should only be called for existent elements.
-            long r = cached.row;
-            if (r >= rowCount) return emptyValue;
-            int rr = (int) (r - offset[0]);  // row relative to current block of data
+            if (track.row >= track.rowCount) return emptyValue;
+            int rr = (int) (track.row - offset[0]);  // row relative to current block of data
             if (rr >= count[0])
             {
                 // Out of data, so load another block.
                 rr = 0;
-                offset[0] = r;
-                count[0] = Math.min (count[0], (int) (rowCount - r));  // Don't read past end of dataset.
-                loadChunkAttribute ();
+                offset[0] = track.row;
+                count[0] = Math.min (count[0], (int) (track.rowCount - track.row));  // Don't read past end of dataset.
+
+                // Load chunkAttribute.
+                Object temp = datasetAttribute.getData (offset, count);
+                if (type == double.class)
+                {
+                    chunkAttribute = (double[]) temp;
+                }
+                else if (type == float.class)
+                {
+                    chunkAttribute = new double[count[0]];
+                    float[] f = (float[]) temp;
+                    for (int r = 0; r < count[0]; r++) chunkAttribute[r] = f[r];
+                }
+                else if (type == int.class)
+                {
+                    chunkAttribute = new double[count[0]];
+                    int[] n = (int[]) temp;
+                    for (int r = 0; r < count[0]; r++) chunkAttribute[r] = n[r];
+                }
+                else if (type == BigInteger.class)
+                {
+                    chunkAttribute = new double[count[0]];
+                    BigInteger[] n = (BigInteger[]) temp;
+                    for (int r = 0; r < count[0]; r++) chunkAttribute[r] = n[r].doubleValue ();
+                }
             }
             return chunkAttribute[rr];
         }
@@ -783,48 +717,15 @@ public class Table extends Function
             throw new AbortRun ("MatrixSonataEdgesHDF does not support set()");
         }
 
-        protected void loadChunkAttribute ()
-        {
-            Object temp = datasetAttribute.getData (offset, count);
-            if (type == double.class)
-            {
-                chunkAttribute = (double[]) temp;
-            }
-            else if (type == float.class)
-            {
-                chunkAttribute = new double[count[0]];
-                float[] f = (float[]) temp;
-                for (int r = 0; r < count[0]; r++) chunkAttribute[r] = f[r];
-            }
-            else if (type == int.class)
-            {
-                chunkAttribute = new double[count[0]];
-                int[] n = (int[]) temp;
-                for (int r = 0; r < count[0]; r++) chunkAttribute[r] = n[r];
-            }
-            else if (type == BigInteger.class)
-            {
-                chunkAttribute = new double[count[0]];
-                BigInteger[] n = (BigInteger[]) temp;
-                for (int r = 0; r < count[0]; r++) chunkAttribute[r] = n[r].doubleValue ();
-            }
-        }
-
         public class IteratorEdge implements IteratorNonzero
         {
             protected BigInteger[] chunkSource;
             protected BigInteger[] chunkTarget;
-            protected long         row = -1;
             protected int          rr;  // row relative to start of chunk
-
-            public IteratorEdge ()
-            {
-                cached.row = -1;  // Reset the shared row when an iterator goes into service. Hopefully there is only one iterator!
-            }
 
             protected void getNext ()
             {
-                cached.row = ++row;
+                ++row;
                 if (row >= rowCount) return;
                 rr = (int) (row - offset[0]);  // row relative to current block of data
                 if (rr < count[0]) return;
@@ -836,7 +737,6 @@ public class Table extends Function
 
                 chunkSource = (BigInteger[]) datasetSource.getData (offset, count);
                 chunkTarget = (BigInteger[]) datasetTarget.getData (offset, count);
-                if (datasetAttribute != null) loadChunkAttribute ();
             }
 
             public boolean hasNext ()
@@ -877,16 +777,17 @@ public class Table extends Function
     **/
     public static class MatrixSonataSpikesHDF extends Matrix implements AutoCloseable
     {
-        protected Path    filePath;  // For releasing the HDF file when we are done.
-        protected Dataset datasetTime;
-        protected long[]  columnIDs;
-        protected long[]  columnPointers;
-        protected int     rows;  // Tallest column seen.
-        protected double  emptyValue = Double.POSITIVE_INFINITY;
+        protected SubHolderHDF sub;  // For releasing the HDF file when we are done.
+        protected Dataset      datasetTime;
+        protected long[]       columnIDs;
+        protected long[]       columnPointers;
+        protected int          rows;  // Tallest column seen.
+        protected double       emptyValue = Double.POSITIVE_INFINITY;
 
-        public MatrixSonataSpikesHDF (Path filePath, Group population)
+        public MatrixSonataSpikesHDF (SubHolderHDF sub, Group population)
         {
-            SubHolderHDF.allocate (filePath);
+            this.sub = sub;
+            sub.allocate ();
             datasetTime = population.getDatasetByPath ("timestamps");
 
             // Scan node_ids and assemble index.
@@ -936,7 +837,7 @@ public class Table extends Function
 
         public void close () throws Exception
         {
-            SubHolderHDF.release (filePath);
+            sub.release ();
         }
 
         public int rows ()
@@ -992,29 +893,30 @@ public class Table extends Function
     public static class HolderSheet implements Holder
     {
         protected List<String>      strings = new ArrayList<String> ();     // collection of all strings that appear in the workbook
-        protected Map<String,Sheet> wb      = new HashMap<String,Sheet> (); // workbook, a collection of worksheets
+        public    Map<String,Sheet> wb      = new HashMap<String,Sheet> (); // workbook, a collection of worksheets
         protected Sheet             first;                                  // The first sheet defined in the file. This is the default when no sheet is specified in cell address.
         protected String            anchor;                                 // The most recently parsed anchor cell address. Includes sheet name and coordinates.
         protected Sheet             ws;                                     // anchor sheet
-        protected int               ar;                                     // anchor row
-        protected int               ac;                                     // anchor column
+        public    int               ar;                                     // anchor row
+        public    int               ac;                                     // anchor column
 
-        public HolderSheet (Path path)
+        public HolderSheet (String fileName)
         {
             final double fillThreshold = 0.5;
+            Path filePath = Simulator.instance.get ().jobDir.resolve (fileName);
 
             // File-type triage -- If it's zip, then process as Excel spreadsheet. All others are treated as XSV.
             boolean isZip = false;
-            try (BufferedReader reader = Files.newBufferedReader (path))
+            try (FileInputStream fis = new FileInputStream (filePath.toFile ()))
             {
-                char magic[] = new char[4];
-                reader.read (magic);
+                byte magic[] = new byte[4];
+                fis.read (magic);
                 isZip =  magic[0] == 'P'  &&  magic[1] == 'K'  &&  magic[2] == 3  &&  magic[3] == 4;
             }
             catch (Exception e)
             {
                 PrintStream err = Backend.err.get ();
-                err.println ("ERROR: Can't open table file: " + path);
+                err.println ("ERROR: Can't open table file: " + filePath);
                 e.printStackTrace (err);
                 throw new AbortRun ();
             }
@@ -1044,34 +946,33 @@ public class Table extends Function
                             if (temp.isBlank ()) continue;
 
                             // First try to interpret as number. On failure, store as string.
-                            double value = Scalar.parseDouble (temp, 0);
-                            if (value == 0)  // Because temp is non-blank, zero indicates not parseable as number.
+                            try
+                            {
+                                ws.numbers.set (ws.rows, c, Scalar.parseDouble (temp));
+                                fillN++;
+                            }
+                            catch (NumberFormatException e)
                             {
                                 strings.add (temp);
                                 int stringIndex = strings.size ();
                                 ws.strings.set (ws.rows, c, stringIndex);
                                 fillS++;
                             }
-                            else
-                            {
-                                ws.numbers.set (ws.rows, c, value);
-                                fillN++;
-                            }
                         }
                         ws.rows++;
-                        ws.columns = Math.max (ws.columns, columns);
+                        ws.columns = Math.max (ws.columns, count);
                         return true;
                     }
                 }
                 ProcessXSV process = new ProcessXSV ();
-                try (BufferedReader reader = Files.newBufferedReader (path))
+                try (BufferedReader reader = Files.newBufferedReader (filePath))
                 {
                     process.parse (reader);
                 }
                 catch (Exception e)
                 {
                     PrintStream err = Backend.err.get ();
-                    err.println ("ERROR: Failed to parse CSV file: " + path);
+                    err.println ("ERROR: Failed to parse CSV file: " + filePath);
                     e.printStackTrace (err);
                     throw new AbortRun ();
                 }
@@ -1088,7 +989,7 @@ public class Table extends Function
             }
 
             // Try to process as Excel workbook
-            try (ZipFile archive = new ZipFile (path.toFile ()))
+            try (ZipFile archive = new ZipFile (filePath.toFile ()))
             {
                 // Set up XML parser
                 DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance ();
@@ -1141,6 +1042,8 @@ public class Table extends Function
                 }
 
                 // Determine date styles
+                // See https://www.brendanlong.com/the-minimum-viable-xlsx-reader.html
+                // At a minimum, we accept all pre-defined date styles: 14-22, 45-47
                 Set<Integer> dateStyles = new HashSet<Integer> ();  // collection of all style numbers that should be treated as date
                 if (! stylesPath.isEmpty ())
                 {
@@ -1234,14 +1137,10 @@ public class Table extends Function
                                     // Day 25569 is start of Unix epoch, January 1, 1970.
                                     // I believe that day number includes leap days, so all we need to do is multiply by 86400.
                                     // There are more subtle elements of horology to consider, but this should be good enough.
-
-                                    // The difficulty is identifying a date cell. The only way is to check style (attribute "s").
-                                    // See https://www.brendanlong.com/the-minimum-viable-xlsx-reader.html
-                                    // At a minimum, we could check all pre-defined data styles: 14-22, 45-47
                                     // It appears that MS Excel won't store negative date numbers. Instead, the value is stored as a string.
-
+                                    // The difficulty is identifying a date cell. The only way is to check style (attribute "s").
                                     v = XMLutility.getChild (c, "v");
-                                    if (v == null) continue;  // Sometimes a cell exists in the XML file but has not value.
+                                    if (v == null) continue;  // Sometimes a cell exists in the XML file but has no value.
                                     double d = Double.valueOf (v.getTextContent ());
                                     int s = XMLutility.getAttribute (c, "s", -1);
                                     if (dateStyles.contains (s)) d = (d - 25569) * 86400;  // Convert from Excel time to Unix time.
@@ -1270,7 +1169,7 @@ public class Table extends Function
             catch (Exception e)
             {
                 PrintStream err = Backend.err.get ();
-                err.println ("ERROR: Failed to parse spreadsheet file: " + path);
+                err.println ("ERROR: Failed to parse spreadsheet file: " + filePath);
                 e.printStackTrace (err);
                 throw new AbortRun ();
             }
@@ -1366,6 +1265,16 @@ public class Table extends Function
             return result;
         }
 
+        /**
+            Support legacy code that uses HolderSheet as a utility for accessing spreadsheets.
+            New code should set anchor separately.
+        **/
+        public synchronized int getRowsInColumn (String anchor)
+        {
+            parse (anchor);
+            return getRowsInColumn ();
+        }
+
         public int getColumnsInRow ()
         {
             int result = 0;
@@ -1375,6 +1284,16 @@ public class Table extends Function
                 result++;
             }
             return result;
+        }
+
+        /**
+            Support legacy code that uses HolderSheet as a utility for accessing spreadsheets.
+            New code should set anchor separately.
+        **/
+        public synchronized int getColumnsInRow (String anchor)
+        {
+            parse (anchor);
+            return getColumnsInRow ();
         }
 
         public int rows ()
@@ -1410,13 +1329,19 @@ public class Table extends Function
         }
 
         /**
+            Looks up the row associated with the given keyValue.
+            Builds an index as needed. The current version assumes that only one key column is ever used,
+            such that once the index is built, it never needs to be rebuilt for a different column.
+            @todo Cache a separate index for each column that is requested.
+            @param keyColumn Must be valid, in [0, columns). The caller can use getColumnIndex()
+            to determine this value. If it is -1 (column not found), then don't call this function.
             @return Zero-based index if found. -1 if not found.
         **/
-        public int getRowIndex (int columnIndex, Object columnValue)
+        public int getRowIndex (int keyColumn, Object keyValue)
         {
             if (ws.index == null)
             {
-                if (ws.columnMap == null)  // No column headers, so use all rows. TODO: Need a better way to detect presence of column headers. This is unreliable in multiple ways.
+                if (ws.columnMap == null)  // No column headers, so use row 0 as well as the others. TODO: Need a better way to detect presence of column headers. This is unreliable in multiple ways.
                 {
                     ws.index = new Integer[ws.rows];
                     for (int i = 0; i < ws.rows; i++) ws.index[i] = i;
@@ -1429,11 +1354,11 @@ public class Table extends Function
                 Arrays.sort (ws.index, (t1, t2) -> 
                 {
                     // This implements M sort order, just because it's the most rational way to handle mixed types.
-                    int i1 = (int) ws.strings.get (t1, columnIndex);
-                    int i2 = (int) ws.strings.get (t2, columnIndex);
+                    int i1 = (int) ws.strings.get (t1, keyColumn);
+                    int i2 = (int) ws.strings.get (t2, keyColumn);
                     if (i1 == 0)  // t1 is a number
                     {
-                        if (i2 == 0) return (int) Math.signum (ws.numbers.get (t1, columnIndex) - ws.numbers.get (t2, columnIndex));  // t2 is a number
+                        if (i2 == 0) return (int) Math.signum (ws.numbers.get (t1, keyColumn) - ws.numbers.get (t2, keyColumn));  // t2 is a number
                         else         return -1;  // t2 is a string; number < string
                     }
                     else  // t1 is a string
@@ -1447,26 +1372,28 @@ public class Table extends Function
             // Do binary search on indirect values.
             int rowIndex = Arrays.binarySearch (ws.index, -1, (t1, t2) ->
             {
+                // t1 and t2 are row numbers for the table, not positions in the index.
+                // -1 is a pseudo-row that contains the keyValue.
                 Object o1;
                 if (t1 < 0)
                 {
-                    o1 = columnValue;
+                    o1 = keyValue;
                 }
                 else
                 {
-                    int i = (int) ws.strings.get (t1, columnIndex);
-                    o1 =  i == 0 ? ws.numbers.get (t1, columnIndex) : strings.get (i - 1);
+                    int i = (int) ws.strings.get (t1, keyColumn);
+                    o1 =  i == 0 ? ws.numbers.get (t1, keyColumn) : strings.get (i - 1);
                 }
 
                 Object o2;
                 if (t2 < 0)
                 {
-                    o2 = columnValue;
+                    o2 = keyValue;
                 }
                 else
                 {
-                    int i = (int) ws.strings.get (t2, columnIndex);
-                    o2 =  i == 0 ? ws.numbers.get (t2, columnIndex) : strings.get (i - 1);
+                    int i = (int) ws.strings.get (t2, keyColumn);
+                    o2 =  i == 0 ? ws.numbers.get (t2, keyColumn) : strings.get (i - 1);
                 }
 
                 if (o1 instanceof String)
@@ -1484,78 +1411,61 @@ public class Table extends Function
             return ws.index[rowIndex];
         }
 
-        public double getDouble (double row, double column)
+        public double getDouble (int row, int column)
         {
-            row    += ar;
-            column += ac;
-            int r = (int) row;
-            int c = (int) column;
+            int r = ar + row;
+            int c = ac + column;
             Matrix A = ws.numbers;
-            double d00 = 0;  // Simpler to set zero here rather than in non-sparse case below, but this is minutely less efficient.
-            int rows = 0;  // Don't actually need to initialize, but this silences compiler.
-            int cols = 0;
-            if (A instanceof MatrixSparse)
-            {
-                d00 = A.get (r, c);
-            }
-            else
-            {
-                rows = A.rows ();
-                cols = A.columns ();
-                if (r >= 0  &&  r < rows  &&  c >= 0  &&  c < cols) d00 = A.get (r, c);
-            }
-            if (r == row  &&  c == column) return d00;  // integer coordinates, so no need for interpolation
+            if (! (A instanceof MatrixSparse)  &&  (r < 0  ||  r >= A.rows ()  ||  c < 0  ||  c >= A.columns ())) return 0;
+            return A.get (r, c);
+        }
 
-            // Interpolate data
-            double d01 = 0;
-            double d10 = 0;
-            double d11 = 0;
-            if (A instanceof MatrixSparse)
-            {
-                d01 = A.get (r,   c+1);
-                d10 = A.get (r+1, c  );
-                d11 = A.get (r+1, c+1);
-            }
-            else
-            {
-                if (r >=  0  &&  r < rows    &&  c >= -1  &&  c < cols-1) d01 = A.get (r,   c+1);
-                if (r >= -1  &&  r < rows-1  &&  c >=  0  &&  c < cols  ) d10 = A.get (r+1, c  );
-                if (r >= -1  &&  r < rows-1  &&  c >= -1  &&  c < cols-1) d11 = A.get (r+1, c+1);
-            }
-            if (c >= ws.columns)
-            {
-                d01 = d00;
-                d11 = d10;
-            }
-            if (r >= ws.rows)
-            {
-                d10 = d00;
-                d11 = d01;
-            }
-            double dr = row    - r;
-            double dc = column - c;
-            double dr1 = 1 - dr;
-            double dc1 = 1 - dc;
-            return dc * (dr * d11 + dr1 * d01) + dc1 * (dr * d10 + dr1 * d00);
+        /**
+            Support legacy code that uses HolderSheet as a utility for accessing spreadsheets.
+            New code should set anchor separately.
+        **/
+        public synchronized double getDouble (String anchor, int row, int column)
+        {
+            parse (anchor);
+            return getDouble (row, column);
         }
 
         public String getString (int row, int column)
         {
-            row    += ar;
-            column += ac;
-            int index = (int) ws.strings.get (row, column);
+            int r = ar + row;
+            int c = ac + column;
+            Matrix A = ws.strings;
+            if (! (A instanceof MatrixSparse)  &&  (r < 0  ||  r >= A.rows ()  ||  c < 0  ||  c >= A.columns ())) return "";
+            int index = (int) A.get (r, c);
             if (index > 0) return strings.get (index - 1);  // offset index back to zero-based
 
             // No string, so try returning number.
-            double value = ws.numbers.get (row, column);
+            double value = getDouble (row, column);
             if (value == 0) return "";
             return Scalar.print (value);
+        }
+
+        /**
+            Support legacy code that uses HolderSheet as a utility for accessing spreadsheets.
+            New code should set anchor separately.
+        **/
+        public synchronized String getString (String anchor, int row, int column)
+        {
+            parse (anchor);
+            return getString (row, column);
         }
 
         public Matrix getMatrix ()
         {
             if (ar == 0  &&  ac == 0) return ws.numbers;
             return ws.numbers.getRegion (ar, ac);
+        }
+
+        public IteratorNonzero getIteratorNonzero ()
+        {
+            Matrix A = ws.numbers;
+            if (A instanceof MatrixSparse) return new IteratorSparse ((MatrixSparse) A, ar, ac);
+            return ((MatrixDense) A).getRegion (ar, ac).getIteratorNonzero ();
         }
     }
 
@@ -1573,9 +1483,8 @@ public class Table extends Function
         Object H = simulator.holders.get (key);
         if (H == null)
         {
-            Path filePath = simulator.jobDir.resolve (fileName);
-            if (hdf.isBlank ()) H = new HolderSheet (filePath);
-            else                H = new HolderHDF   (filePath, hdf);
+            if (hdf.isBlank ()) H = new HolderSheet (fileName);
+            else                H = new HolderHDF   (fileName, hdf);
             simulator.holders.put (key, H);
             return (Holder) H;
         }
@@ -1644,8 +1553,8 @@ public class Table extends Function
             }
             else
             {
-                if (isString) return new Text (H.getString ((int) row, (int) col));
-                return new Scalar (H.getDouble (row, col));
+                if (isString) return new Text   (H.getString ((int) row, (int) col));
+                return               new Scalar (H.getDouble ((int) row, (int) col));
             }
         }
     }
@@ -1653,5 +1562,47 @@ public class Table extends Function
     public String toString ()
     {
         return "table";
+    }
+
+    public Operator operandA ()
+    {
+        if (operands.length > 1) return operands[1];
+        return null;
+    }
+
+    public Operator operandB ()
+    {
+        if (operands.length > 2) return operands[2];
+        return null;
+    }
+
+    public boolean hasCorrectForm ()
+    {
+        if (operands.length < 3) return false;
+        if (! (operands[0] instanceof Constant)) return false;
+        // Could also check if op1 and op2 are numeric expressions, but not worth the effort.
+        return true;
+    }
+
+    public IteratorNonzero getIteratorNonzero (Instance context)
+    {
+        Holder H = open (context);
+        if (H == null) return null;
+
+        if (H instanceof HolderSheet)
+        {
+            HolderSheet HS = (HolderSheet) H;
+
+            String anchor = "";
+            Operator kwAnchor = getKeyword ("anchor");
+            if (kwAnchor != null) anchor = ((Text) kwAnchor.eval (context)).toString ();
+            synchronized (HS)
+            {
+                HS.parse (anchor);
+                return HS.getIteratorNonzero ();
+            }
+        }
+
+        return H.getIteratorNonzero ();
     }
 }

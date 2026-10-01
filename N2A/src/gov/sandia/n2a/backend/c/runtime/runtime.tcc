@@ -1,5 +1,5 @@
 /*
-Copyright 2018-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2018-2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -695,7 +695,7 @@ T
 Part<T>::getP ()
 {
 #   ifdef n2a_FP
-    return 1 << FP_MSB2;
+    return 1 << FP_MSB;
 #   else
     return 1;
 #   endif

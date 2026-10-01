@@ -42,6 +42,7 @@ import gov.sandia.n2a.language.function.Mmatrix;
 import gov.sandia.n2a.language.function.Output;
 import gov.sandia.n2a.language.function.ReadImage;
 import gov.sandia.n2a.language.function.ReadMatrix;
+import gov.sandia.n2a.language.function.Table;
 import gov.sandia.n2a.language.operator.Add;
 import gov.sandia.n2a.language.operator.MultiplyElementwise;
 import gov.sandia.n2a.language.type.Matrix;
@@ -131,6 +132,7 @@ public class JobC extends Thread
     protected HashMap<Object,String> outputNames      = new HashMap<Object,String> ();
     protected HashMap<Object,String> imageInputNames  = new HashMap<Object,String> ();
     protected HashMap<Object,String> imageOutputNames = new HashMap<Object,String> ();
+    protected HashMap<Object,String> tableNames       = new HashMap<Object,String> ();
     public    HashMap<Object,String> stringNames      = new HashMap<Object,String> ();
     public    HashMap<Object,String> extensionNames   = new HashMap<Object,String> ();  // Shared by all extension-provided operators.
 
@@ -144,6 +146,7 @@ public class JobC extends Thread
     protected HashMap<String,Output> mainOutput      = new HashMap<String,Output> ();
     protected List<ReadImage>        mainImageInput  = new ArrayList<ReadImage> ();
     protected List<Draw>             mainImageOutput = new ArrayList<Draw> ();
+    protected List<Table>            mainTable       = new ArrayList<Table> ();
     public    List<Operator>         mainExtension   = new ArrayList<Operator> ();  // Shared by all extension-provided operators.
 
     public JobC (MNode job)
@@ -762,7 +765,7 @@ public class JobC extends Thread
         (
             JobC.class, job, runtimeDir, "runtime/",
             "mymath.h", "fixedpoint.cc",
-            "holder.cc", "holder.h", "holder.tcc",
+            "holder.cc", "holder.h", "holder.tcc", "holderImage.tcc", "holderMatrix.tcc",
             "KDTree.h", "mystring.h",
             "matrix.h", "Matrix.tcc", "MatrixFixed.tcc", "MatrixSparse.tcc", "pointer.h",
             "MNode.h", "MNode.cc",
@@ -776,7 +779,9 @@ public class JobC extends Thread
             "shared.h",
             "OutputHolder.h", "OutputParser.h",  // Not needed by runtime, but provided as a utility for users.
             "Shader.vp", "Shader.fp",  // GPU code not compiled into runtime.
-            "glcorearb.h", "wglext.h"  // OpenGL headers provided by Khronos.
+            // Embedded external resources
+            "glcorearb.h", "wglext.h",  // OpenGL headers provided by Khronos.
+            "miniz.h", "miniz.c", "pugixml.cpp", "pugixml.hpp", "pugiconfig.hpp"  // Support for Zip and XML, needed by Excel and matrix I/O.
         );
 
         Path KHR = runtimeDir.resolve ("KHR");
@@ -2005,33 +2010,60 @@ public class JobC extends Thread
                         if (operand0 instanceof Constant)
                         {
                             String fileName = operand0.toString ();
+
+                            // ReadMatrix, Table and Input all follow a similar pattern.
+                            // They have a resource key that can change whether they are static or dynamic.
                             if (f instanceof ReadMatrix)
                             {
                                 ReadMatrix r = (ReadMatrix) f;
-                                r.name = matrixNames.get (fileName);
-                                if (r.name == null)
+                                String resourceKey = r.resourceKey ();
+                                if (resourceKey.isEmpty ())
                                 {
-                                    r.name = "Matrix" + matrixNames.size ();
-                                    matrixNames.put (fileName, r.name);
-                                    mainMatrix.add (r);
+                                    r.name = matrixNames.get (fileName);
+                                    if (r.name == null)
+                                    {
+                                        r.name = "Matrix" + matrixNames.size ();
+                                        matrixNames.put (fileName, r.name);
+                                        mainMatrix.add (r);
+                                    }
                                 }
-                            }
-                            else if (f instanceof Mfile)
-                            {
-                                Mfile m = (Mfile) f;
-                                m.name = mfileNames.get (fileName);
-                                if (m.name == null)
+                                else
                                 {
-                                    m.name = "Mfile" + mfileNames.size ();
-                                    mfileNames.put (fileName, m.name);
-                                    mainMfile.add (m);
+                                    Operator resource = r.getKeyword (resourceKey);
+                                    if (resource instanceof Constant)
+                                    {
+                                        String key = fileName + "|" + resource.getString ();
+                                        r.name = matrixNames.get (key);
+                                        if (r.name == null)
+                                        {
+                                            r.name = "Matrix" + matrixNames.size ();
+                                            matrixNames.put (key, r.name);
+                                            mainMatrix.add (r);
+                                        }
+                                    }
+                                    else if (resource instanceof AccessVariable)
+                                    {
+                                        AccessVariable av = (AccessVariable) resource;
+                                        Variable v = av.reference.variable;
+                                        r.name = matrixNames.get (v);
+                                        if (r.name == null)
+                                        {
+                                            r.name = "Matrix" + matrixNames.size ();
+                                            matrixNames.put (v, r.name);
+                                        }
+                                    }
+                                    else
+                                    {
+                                        r.name = "Matrix" + matrixNames.size ();
+                                        matrixNames.put (op, r.name);
+                                    }
                                 }
                             }
                             else if (f instanceof Input)
                             {
                                 Input i = (Input) f;
                                 Operator hdf = i.getKeyword ("hdf");
-                                if (hdf == null)  // XSF case: file name alone identifies open file.
+                                if (hdf == null)  // XSV case: file name alone identifies open file.
                                 {
                                     i.name = inputNames.get (fileName);
                                     if (i.name == null)
@@ -2069,8 +2101,64 @@ public class JobC extends Thread
                                     {
                                         // Since helper function will be called every time, we only need one holder variable per equation set.
                                         i.name = "Input" + inputNames.size ();
-                                        inputNames.put (s, i.name);
+                                        inputNames.put (op, i.name);
                                     }
+                                }
+                            }
+                            else if (f instanceof Table)
+                            {
+                                Table t = (Table) f;
+                                Operator hdf = t.getKeyword ("hdf");
+                                if (hdf == null)
+                                {
+                                    t.name = tableNames.get (fileName);
+                                    if (t.name == null)
+                                    {
+                                        t.name = "Table" + tableNames.size ();
+                                        tableNames.put (fileName, t.name);
+                                        mainTable.add (t);
+                                    }
+                                }
+                                else
+                                {
+                                    if (hdf instanceof Constant)
+                                    {
+                                        String key = fileName + "|" + hdf.getString ();
+                                        t.name = tableNames.get (key);
+                                        if (t.name == null)
+                                        {
+                                            t.name = "Table" + tableNames.size ();
+                                            tableNames.put (key, t.name);
+                                            mainTable.add (t);
+                                        }
+                                    }
+                                    else if (hdf instanceof AccessVariable)
+                                    {
+                                        AccessVariable av = (AccessVariable) hdf;
+                                        Variable v = av.reference.variable;
+                                        t.name = tableNames.get (v);
+                                        if (t.name == null)
+                                        {
+                                            t.name = "Table" + tableNames.size ();
+                                            tableNames.put (v, t.name);
+                                        }
+                                    }
+                                    else
+                                    {
+                                        t.name = "Table" + tableNames.size ();
+                                        tableNames.put (op, t.name);
+                                    }
+                                }
+                            }
+                            else if (f instanceof Mfile)
+                            {
+                                Mfile m = (Mfile) f;
+                                m.name = mfileNames.get (fileName);
+                                if (m.name == null)
+                                {
+                                    m.name = "Mfile" + mfileNames.size ();
+                                    mfileNames.put (fileName, m.name);
+                                    mainMfile.add (m);
                                 }
                             }
                             else if (f instanceof Output)
@@ -2122,13 +2210,7 @@ public class JobC extends Thread
                                 matrixNames.put (op,       r.name     = "Matrix"   + matrixNames.size ());
                                 stringNames.put (operand0, r.fileName = "fileName" + stringNames.size ());
                                 add.name = r.fileName;
-                            }
-                            else if (f instanceof Mfile)
-                            {
-                                Mfile m = (Mfile) f;
-                                mfileNames .put (op,       m.name     = "Mfile"    + mfileNames .size ());
-                                stringNames.put (operand0, m.fileName = "fileName" + stringNames.size ());
-                                add.name = m.fileName;
+                                // Resource path can be any of {constant, variable, expression}, so handled separately in prepareDynamicObjects2().
                             }
                             else if (f instanceof Input)
                             {
@@ -2136,7 +2218,22 @@ public class JobC extends Thread
                                 inputNames .put (op,       i.name     = "Input"    + inputNames .size ());
                                 stringNames.put (operand0, i.fileName = "fileName" + stringNames.size ());
                                 add.name = i.fileName;
-                                // HDF path can be any of {constant, variable, expression}, so handled separately.
+                                // ditto for HDF path
+                            }
+                            else if (f instanceof Table)
+                            {
+                                Table t = (Table) f;
+                                tableNames .put (op,       t.name     = "Table"    + tableNames .size ());
+                                stringNames.put (operand0, t.fileName = "fileName" + stringNames.size ());
+                                add.name = t.fileName;
+                                // ditto for HDF path
+                            }
+                            else if (f instanceof Mfile)
+                            {
+                                Mfile m = (Mfile) f;
+                                mfileNames .put (op,       m.name     = "Mfile"    + mfileNames .size ());
+                                stringNames.put (operand0, m.fileName = "fileName" + stringNames.size ());
+                                add.name = m.fileName;
                             }
                             else if (f instanceof Output)
                             {
@@ -2168,13 +2265,96 @@ public class JobC extends Thread
                             if (f instanceof ReadMatrix)
                             {
                                 ReadMatrix r = (ReadMatrix) f;
-                                r.name = matrixNames.get (v);
-                                if (r.name == null)
+                                r.fileName = fileName;
+                                Operator resource = r.getKeyword (r.resourceKey ());  // Possible for resourceKey to be "". In that case, resource is null.
+                                if (resource == null  ||  resource instanceof Constant)
+                                {
+                                    r.name = matrixNames.get (v);
+                                    if (r.name == null)
+                                    {
+                                        r.name = "Matrix" + matrixNames.size ();
+                                        matrixNames.put (v, r.name);
+                                    }
+                                }
+                                else if (resource instanceof AccessVariable)
+                                {
+                                    // Both variables (fileName, resource) are needed to uniquely identify r.
+                                    Variable w = ((AccessVariable) resource).reference.variable;
+                                    AbstractMap.SimpleEntry<Variable, Variable> key = new AbstractMap.SimpleEntry<> (v, w);
+                                    r.name = matrixNames.get (key);
+                                    if (r.name == null)
+                                    {
+                                        r.name = "Matrix" + matrixNames.size ();
+                                        matrixNames.put (key, r.name);
+                                    }
+                                }
+                                else  // resource is expression
                                 {
                                     r.name = "Matrix" + matrixNames.size ();
-                                    matrixNames.put (v, r.name);
+                                    matrixNames.put (op, r.name);
                                 }
-                                r.fileName = fileName;
+                            }
+                            else if (f instanceof Input)
+                            {
+                                Input i = (Input) f;
+                                i.fileName = fileName;
+                                Operator hdf = i.getKeyword ("hdf");
+                                if (hdf == null  ||  hdf instanceof Constant)
+                                {
+                                    i.name = inputNames.get (v);
+                                    if (i.name == null)
+                                    {
+                                        i.name = "Input" + inputNames.size ();
+                                        inputNames.put (v, i.name);
+                                    }
+                                }
+                                else if (hdf instanceof AccessVariable)
+                                {
+                                    Variable w = ((AccessVariable) hdf).reference.variable;
+                                    AbstractMap.SimpleEntry<Variable, Variable> key = new AbstractMap.SimpleEntry<> (v, w);
+                                    i.name = inputNames.get (key);
+                                    if (i.name == null)
+                                    {
+                                        i.name = "Input" + inputNames.size ();
+                                        inputNames.put (key, i.name);
+                                    }
+                                }
+                                else  // resource is expression
+                                {
+                                    i.name = "Input" + inputNames.size ();
+                                    inputNames.put (op, i.name);
+                                }
+                            }
+                            else if (f instanceof Table)
+                            {
+                                Table t = (Table) f;
+                                t.fileName = fileName;
+                                Operator hdf = t.getKeyword ("hdf");
+                                if (hdf == null  ||  hdf instanceof Constant)
+                                {
+                                    t.name = tableNames.get (v);
+                                    if (t.name == null)
+                                    {
+                                        t.name = "Table" + tableNames.size ();
+                                        tableNames.put (v, t.name);
+                                    }
+                                }
+                                else if (hdf instanceof AccessVariable)
+                                {
+                                    Variable w = ((AccessVariable) hdf).reference.variable;
+                                    AbstractMap.SimpleEntry<Variable, Variable> key = new AbstractMap.SimpleEntry<> (v, w);
+                                    t.name = tableNames.get (key);
+                                    if (t.name == null)
+                                    {
+                                        t.name = "Table" + tableNames.size ();
+                                        tableNames.put (key, t.name);
+                                    }
+                                }
+                                else  // resource is expression
+                                {
+                                    t.name = "Table" + tableNames.size ();
+                                    tableNames.put (op, t.name);
+                                }
                             }
                             else if (f instanceof Mfile)
                             {
@@ -2186,18 +2366,6 @@ public class JobC extends Thread
                                     mfileNames.put (v, m.name);
                                 }
                                 m.fileName = fileName;
-                            }
-                            else if (f instanceof Input)
-                            {
-                                Input i = (Input) f;
-                                i.name = inputNames.get (v);
-                                if (i.name == null)
-                                {
-                                    i.name = "Input" + inputNames.size ();
-                                    inputNames.put (v, i.name);
-                                }
-                                i.fileName = fileName;
-                                // HDF path can be any of {constant, variable, expression}, so handled separately.
                             }
                             else if (f instanceof Output)
                             {
@@ -2272,16 +2440,21 @@ public class JobC extends Thread
         }
         for (ReadMatrix r : mainMatrix)
         {
-            result.append (thread_local + "MatrixInput<" + T + "> * " + r.name + ";\n");
-        }
-        for (Mfile m : mainMfile)
-        {
-            result.append (thread_local + "Mfile<" + T + "> * " + m.name + ";\n");
+            result.append (thread_local + "HolderMatrix<" + T + "> * " + r.name + ";\n");
         }
         for (Input i : mainInput)
         {
             String inputHolder =  i.getKeyword ("hdf") == null ? "InputXSV" : "InputHDF";
             result.append (thread_local + inputHolder + "<" + T + "> * " + i.name + ";\n");
+        }
+        for (Table t : mainTable)
+        {
+            String tableHolder =  t.getKeyword ("hdf") == null ? "TableSheet" : "TableHDF";
+            result.append (thread_local + tableHolder + "<" + T + "> * " + t.name + ";\n");
+        }
+        for (Mfile m : mainMfile)
+        {
+            result.append (thread_local + "Mfile<" + T + "> * " + m.name + ";\n");
         }
         for (Output o : mainOutput.values ())
         {
@@ -2312,22 +2485,22 @@ public class JobC extends Thread
         for (ProvideOperator po : extensions) po.generateMainInitializers (context);
         for (ReadMatrix r : mainMatrix)
         {
+            String   key   = r.resourceKey ();
+            Operator value = r.getKeyword (key);
+            Operator empty = r.getKeyword ("empty");
             result.append ("  " + r.name + " = matrixHelper<" + T + "> (\"" + r.operands[0].getString () + "\"");
+            result.append (", \"" + key + "\"");
+            result.append (", \"" + (value == null ? "" : value.getString ()) + "\"");
+            result.append (", ");
+            if (empty == null) result.append ("(" + T + ") 0");
+            else               context.render (empty);  // empty should always be a constant.
             if (fixedPoint) result.append (", " + r.exponent);
             result.append (");\n");
-        }
-        if (hasMfile)
-        {
-            result.append ("  MDoc::setMissingFileException (1);\n");  // Print warning.
-        }
-        for (Mfile m : mainMfile)
-        {
-            result.append ("  " + m.name + " = MfileHelper<" + T + "> (\"" + m.operands[0].getString () + "\");\n");
         }
         for (Input i : mainInput)
         {
             Operator hdf = i.getKeyword ("hdf");
-            String inputHelper =  hdf == null ? "xsvHelper" : "hdfHelper";
+            String inputHelper = "inputHelper" + (hdf == null ? "XSV" : "HDF");
             result.append ("  " + i.name + " = " + inputHelper + "<" + T + "> (\"" + i.operands[0].getString () + "\"");
             if (hdf != null) result.append (", \"" + hdf.getString () + "\"");
             if (fixedPoint)  result.append (", " + i.exponent + ", " + i.exponentRow);
@@ -2343,6 +2516,23 @@ public class JobC extends Thread
             // This is similar to the current approach for estimating time exponent for fixed-point.
 
             if (i.getKeywordFlag ("nwb")) result.append ("  " + i.name + "->nwb = true;\n");
+        }
+        for (Table t : mainTable)
+        {
+            Operator hdf = t.getKeyword ("hdf");
+            String tableHelper = "tableHelper" + (hdf == null ? "Sheet" : "HDF");
+            result.append ("  " + t.name + " = " + tableHelper + "<" + T + "> (\"" + t.operands[0].getString () + "\"");
+            if (hdf != null) result.append (", \"" + hdf.getString () + "\"");
+            if (fixedPoint) result.append (", " + t.exponent);
+            result.append (");\n");
+        }
+        if (hasMfile)
+        {
+            result.append ("  MDoc::setMissingFileException (1);\n");  // Print warning.
+        }
+        for (Mfile m : mainMfile)
+        {
+            result.append ("  " + m.name + " = MfileHelper<" + T + "> (\"" + m.operands[0].getString () + "\");\n");
         }
         for (Output o : mainOutput.values ())
         {
@@ -3343,7 +3533,7 @@ public class JobC extends Thread
                 }
                 else
                 {
-                    result.append ("  " + T + " dt = ((" + prefix (s.container) + " *) container)->getDt ();\n");
+                    result.append ("  " + T + " dt = container->getDt ();\n");
                 }
             }
 
@@ -4025,55 +4215,70 @@ public class JobC extends Thread
                         break;
                     }
                 }
-                if (! found  &&  cm.A instanceof AccessElement)
+                if (! found)
                 {
-                    AccessElement ae = (AccessElement) cm.A;
-                    Operator op0 = ae.operands[0];
                     result.append ("::getIterator (");
-                    if (op0 instanceof AccessVariable)
+                    if (cm.A instanceof AccessElement)
                     {
-                        AccessVariable av = (AccessVariable) op0;
-                        Variable v = av.reference.variable;
-                        if (v.hasAttribute ("temporary"))
+                        AccessElement ae = (AccessElement) cm.A;
+                        Operator op0 = ae.operands[0];
+                        if (op0 instanceof AccessVariable)
                         {
-                            // Just assume that v is an alias for ReadMatrix or Mmatrix.
-                            // Also, matrix must be a static object. Enforced by AccessElement.hasCorrectForm().
-                            // The following are variants of code in RendererC, but without pointer dereference.
-                            Operator e = v.equations.first ().expression;
-                            if (e instanceof ReadMatrix)
+                            AccessVariable av = (AccessVariable) op0;
+                            Variable v = av.reference.variable;
+                            if (v.hasAttribute ("temporary"))
                             {
-                                ReadMatrix r = (ReadMatrix) e;
-                                result.append (r.name + "->A");
-                            }
-                            else if (e instanceof Mmatrix)
-                            {
-                                Mmatrix m = (Mmatrix) e;
-                                result.append (m.name + "->getMatrix (");
-                                result.append ("\"" + m.getDelimiter () + "\", ");
-                                context.keyPath (m, 1);  // All the keys must be constant.
-                                if (context.useExponent)
+                                // Just assume that v is an alias for ReadMatrix or Mmatrix.
+                                // Also, matrix must be a static object. Enforced by AccessElement.hasCorrectForm().
+                                // The following are variants of code in RendererC, but without pointer dereference.
+                                Operator e = v.equations.first ().expression;
+                                if (e instanceof ReadMatrix)
                                 {
-                                    if (m.operands.length > 1) result.append (", ");
-                                    result.append (m.exponentNext);
+                                    ReadMatrix r = (ReadMatrix) e;
+                                    Operator anchor = r.getKeyword ("anchor");
+                                    result.append (r.name + "->getMatrix (");
+                                    if (anchor != null) result.append ("\"" + anchor.getString () + "\"");  // Just assume string constant.
+                                    result.append (")");
                                 }
-                                result.append (")");
+                                else if (e instanceof Mmatrix)
+                                {
+                                    Mmatrix m = (Mmatrix) e;
+                                    result.append (m.name + "->getMatrix (");
+                                    result.append ("\"" + m.getDelimiter () + "\", ");
+                                    context.keyPath (m, 1);  // All the keys must be constant.
+                                    if (context.useExponent)
+                                    {
+                                        if (m.operands.length > 1) result.append (", ");
+                                        result.append (m.exponentNext);
+                                    }
+                                    result.append (")");
+                                }
                             }
-                            // TODO: else render with ProvideOperator
+                            else
+                            {
+                                if (! v.hasAttribute ("MatrixPointer")) result.append ("& ");
+                                context.global = false;
+                                result.append (resolve (av.reference, context, true, "dummy->", false));  // Actually an rvalue, but we claim lvalue to finesse resolve() into not adding dereference for matrix pointer.
+                                context.global = true;
+                            }
                         }
-                        else
+                        else  // Must be a constant. Enforced by AccessElement.hasCorrectForm().
                         {
-                            if (! v.hasAttribute ("MatrixPointer")) result.append ("& ");
-                            context.global = false;
-                            result.append (resolve (av.reference, context, true, "dummy->", false));  // Actually an rvalue, but we claim lvalue to finesse resolve() into not adding dereference for matrix pointer.
-                            context.global = true;
+                            Constant c = (Constant) op0;
+                            result.append (c.name);
                         }
                     }
-                    else  // Must be a constant. Enforced by AccessElement.hasCorrectForm().
+                    else if (cm.A instanceof Table)
                     {
-                        Constant c = (Constant) op0;
-                        result.append (c.name);
+                        Table t = (Table) cm.A;
+                        Operator anchor = t.getKeyword ("anchor");
+
+                        result.append (t.name + "->getMatrix (");
+                        if (anchor != null) context.render (anchor);
+                        result.append (")");
                     }
-                    result.append (");\n");
+                    // else badness. Every NonzeroIterable class should be here.
+                    result.append (");\n");  // Finishes the line assigning to "it".
                 }
 
                 result.append ("  return new ConnectMatrix<" + T + "> (rows, cols, " + cm.rows.index + ", " + cm.cols.index + ", it, dummy, this);\n");
@@ -5237,18 +5442,19 @@ public class JobC extends Thread
         result.append ("{\n");
         if (bed.dt.hasAttribute ("accessor"))
         {
-            if (s.container == null)
+            if (s.container == null)  // Top-level part. "container" is Wrapper.
             {
                 result.append ("  return container->getDt ();\n");  // Get default value from Wrapper.
             }
             else
             {
-                // Notice that our container $t' won't be "constant", because otherwise we'd be "constant".
+                // Notice that our container's $t' won't be "constant", because otherwise we'd be "constant".
                 // It could be an "initOnly" local variable, but not one that updates after init.
                 BackendDataC pbed = (BackendDataC) s.container.backendData;
-                context.part = s.container;
-                result.append ("  return " + resolve (pbed.dt.reference, context, false, "container->", false) + ";\n");
-                context.part = s;
+                String base = containerOf (s, false, "");
+                context.part = s.container;  // Shifting context is necessary because otherwise resolve() will call our local getDt().
+                result.append ("  return " + resolve (pbed.dt.reference, context, false, base, false) + ";\n");
+                context.part = s;  // Restore context.
             }
         }
         else  // "constant" or local variable (whether or not "initOnly")
@@ -6115,10 +6321,10 @@ public class JobC extends Thread
             {
                 if (! (op instanceof Function)) return true;  // Everything we care about below is an IO function.
 
-                // If filename is given by a variable, then it could be used more than once,
-                // so we need to guard against repeats.
-                // If filename is an expression, each occurrence is unique.
-                // If filename is constant, we don't deal with it here.
+                // Like in assignNames(), we need to triage each I/O function to see if it is static or dynamic.
+                // Constant filename (and constant resource, if present) goes in main init. Everything else gets set up here.
+                // If filename or resource is given by a variable, then it could be used more than once, so we need to guard against repeats.
+                // If filename or resource is an expression, each occurrence is unique.
                 Variable v = null;
                 Function f = (Function) op;
                 if (f.operands.length > 0)
@@ -6127,33 +6333,62 @@ public class JobC extends Thread
                     if (operand0 instanceof AccessVariable) v = ((AccessVariable) operand0).reference.variable;
                 }
 
+                for (ProvideOperator po : extensions)
+                {
+                    Boolean result = po.prepareDynamicObjects (op, context, init, pad);
+                    if (result != null) return result;
+                }
+
+                // ReadMatrix, Input and Table all do a similar thing. They check if a resource is defined,
+                // in addition to the file.
                 if (op instanceof ReadMatrix)
                 {
                     ReadMatrix r = (ReadMatrix) op;
-                    if (! (r.operands[0] instanceof Constant))
+                    Operator op0         = r.operands[0];
+                    String   resourceKey = r.resourceKey ();  // Can be "".
+                    Operator resource    = r.getKeyword (resourceKey);
+                    Operator empty       = r.getKeyword ("empty");
+                    boolean fileIsConstant     = op0 instanceof Constant;
+                    boolean resourceIsConstant =  resource == null  ||  resource instanceof Constant;
+                    if (! fileIsConstant  ||  ! resourceIsConstant)  // Source of matrix is dynamic in some way, so must process it here.
                     {
-                        if (v != null)
+                        Variable w = null;
+                        if (resource instanceof AccessVariable) w = ((AccessVariable) resource).reference.variable;
+                        if (v != null  &&  w != null)
+                        {
+                            AbstractMap.SimpleEntry<Variable, Variable> entry = new AbstractMap.SimpleEntry<> (v, w);
+                            if (context.defined.contains (entry)) return true;
+                            context.defined.add (entry);
+                        }
+                        else if (v != null  &&  resourceIsConstant)
                         {
                             if (context.defined.contains (v)) return true;
                             context.defined.add (v);
                         }
-                        context.result.append (pad + "MatrixInput<" + T + "> * " + r.name + " = matrixHelper<" + T + "> (" + r.fileName);
+                        else if (w != null  &&  fileIsConstant)
+                        {
+                            if (context.defined.contains (w)) return true;
+                            context.defined.add (w);
+                        }
+
+                        context.result.append (pad + "HolderMatrix<" + T + "> * " + r.name + " = matrixHelper<" + T + "> (" + r.fileName);
+                        context.result.append (", \"" + resourceKey + "\"");
+                        if (resource == null)
+                        {
+                            context.result.append (", \"\"");
+                        }
+                        else
+                        {
+                            if      (resource instanceof Constant) context.result.append (", \"" + resource.getString () + "\"");
+                            else if (resource instanceof Add)      context.result.append (", " + ((Add) resource).name);
+                            else if (w != null)                    context.result.append (", " + resolve (w.reference, context, false));
+                            // else badness
+                        }
+                        context.result.append (", ");
+                        if (empty == null) context.result.append ("(" + T + ") 0");
+                        else               context.render (empty);
                         if (fixedPoint) context.result.append (", " + r.exponent);
                         context.result.append (");\n");
-                    }
-                    return true;
-                }
-                if (op instanceof Mfile)
-                {
-                    Mfile m = (Mfile) op;
-                    if (! (m.operands[0] instanceof Constant))
-                    {
-                        if (v != null)
-                        {
-                            if (context.defined.contains (v)) return true;
-                            context.defined.add (v);
-                        }
-                        context.result.append (pad + "Mfile<" + T + "> * " + m.name + " = MfileHelper<" + T + "> (" + m.fileName + ");\n");
                     }
                     return true;
                 }
@@ -6173,7 +6408,6 @@ public class JobC extends Thread
                         if (v != null  &&  w != null)  // filename and hdf path are both variables
                         {
                             // Use the combination of variables as a filter.
-                            // TODO: May need to modify assignNames() to create a unique Input for each combination of specific variables.
                             AbstractMap.SimpleEntry<Variable, Variable> entry = new AbstractMap.SimpleEntry<> (v, w);
                             if (context.defined.contains (entry)) return true;
                             context.defined.add (entry);
@@ -6192,11 +6426,11 @@ public class JobC extends Thread
 
                         if (hdf == null)
                         {
-                            context.result.append (pad + "InputXSV<" + T + "> * " + i.name + " = xsvHelper<" + T + "> (" + i.fileName);
+                            context.result.append (pad + "InputXSV<" + T + "> * " + i.name + " = inputHelperXSV<" + T + "> (" + i.fileName);
                         }
                         else
                         {
-                            context.result.append (pad + "InputHDF<" + T + "> * " + i.name + " = hdfHelper<" + T + "> (" + i.fileName);
+                            context.result.append (pad + "InputHDF<" + T + "> * " + i.name + " = inputHelperHDF<" + T + "> (" + i.fileName);
                         }
                         if (hdf != null)
                         {
@@ -6227,6 +6461,68 @@ public class JobC extends Thread
                         {
                             context.result.append (pad + i.name + "->nwb = true;\n");
                         }
+                    }
+                    return true;
+                }
+                if (op instanceof Table)
+                {
+                    Table t = (Table) op;
+                    Operator op0 = t.operands[0];
+                    Operator hdf = t.getKeyword ("hdf");
+                    boolean fileIsConstant = op0 instanceof Constant;
+                    boolean hdfIsConstant  =  hdf == null  ||  hdf instanceof Constant;
+                    if (! fileIsConstant  ||  ! hdfIsConstant)  // Source of input is dynamic in some way, so must process it here.
+                    {
+                        Variable w = null;
+                        if (hdf instanceof AccessVariable) w = ((AccessVariable) hdf).reference.variable;
+                        if (v != null  &&  w != null)
+                        {
+                            AbstractMap.SimpleEntry<Variable, Variable> entry = new AbstractMap.SimpleEntry<> (v, w);
+                            if (context.defined.contains (entry)) return true;
+                            context.defined.add (entry);
+                        }
+                        else if (v != null  &&  hdfIsConstant)
+                        {
+                            if (context.defined.contains (v)) return true;
+                            context.defined.add (v);
+                        }
+                        else if (w != null  &&  fileIsConstant)
+                        {
+                            if (context.defined.contains (w)) return true;
+                            context.defined.add (w);
+                        }
+
+                        if (hdf == null)
+                        {
+                            context.result.append (pad + "TableSheet<" + T + "> * " + t.name + " = tableHelperSheet<" + T + "> (" + t.fileName);
+                        }
+                        else
+                        {
+                            context.result.append (pad + "TableHDF<" + T + "> * " + t.name + " = tableHelperHDF<" + T + "> (" + t.fileName);
+                        }
+                        if (hdf != null)
+                        {
+                            if      (hdf instanceof Constant) context.result.append (", \"" + hdf.getString () + "\"");
+                            else if (hdf instanceof Add)      context.result.append (", " + ((Add) hdf).name);
+                            else if (w != null)               context.result.append (", " + resolve (w.reference, context, false));
+                            // else badness
+                        }
+                        if (fixedPoint) context.result.append (", " + t.exponent);
+                        context.result.append (");\n");
+                    }
+                    return true;
+                }
+                if (op instanceof Mfile)
+                {
+                    Mfile m = (Mfile) op;
+                    if (! (m.operands[0] instanceof Constant))
+                    {
+                        if (v != null)
+                        {
+                            if (context.defined.contains (v)) return true;
+                            context.defined.add (v);
+                        }
+                        context.result.append (pad + "Mfile<" + T + "> * " + m.name + " = MfileHelper<" + T + "> (" + m.fileName + ");\n");
                     }
                     return true;
                 }

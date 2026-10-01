@@ -5,7 +5,7 @@ Copyright (c) 2001-2004 Dept. of Computer Science and Beckman Institute,
 Distributed under the UIUC/NCSA Open Source License.
 
 
-Copyright 2005-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2005-2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -1666,5 +1666,25 @@ column (const Matrix<T> & A, int column)
 {
     return Matrix<T> (A.data, A.offset + column * A.strideC_, A.rows_, 1, A.strideR_, A.strideC_);
 }
+
+template<class T>
+Matrix<T>
+region  (const Matrix<T> & A, int firstRow, int firstColumn, int lastRow, int lastColumn)
+{
+    // This aggressive range checking is not really meant to hide user errors, just prevent memory violations.
+    if (firstRow    <  0         ) firstRow    = 0;
+    if (firstColumn <  0         ) firstColumn = 0;
+    if (firstRow    >= A.rows_   ) firstRow    = A.rows_    - 1;
+    if (firstColumn >= A.columns_) firstColumn = A.columns_ - 1;
+    if (lastRow    < 0  ||  lastRow    >= A.rows_   ) lastRow    = A.rows_    - 1;
+    if (lastColumn < 0  ||  lastColumn >= A.columns_) lastColumn = A.columns_ - 1;
+    return Matrix<T> (A.data,
+                      A.offset + firstRow * A.strideR_ + firstColumn * A.strideC_,
+                      lastRow - firstRow + 1,
+                      lastColumn - firstColumn + 1,
+                      A.strideR_,
+                      A.strideC_);
+}
+
 
 #endif

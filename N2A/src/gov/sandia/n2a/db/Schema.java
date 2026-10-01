@@ -1,5 +1,5 @@
 /*
-Copyright 2017-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -41,6 +41,8 @@ public class Schema
 
     /**
         Convenience method which reads the header and loads all the objects as children of the given node.
+        Currently, this does not automatically switch to JSON if the file lacks schema magic.
+        That kind of switch should be handled by the caller. See MDoc.load() for an example.
     **/
     public static Schema readAll (MNode node, Reader reader) throws IOException
     {
@@ -48,21 +50,31 @@ public class Schema
         boolean alreadyBuffered = reader instanceof BufferedReader;
         if (alreadyBuffered) br =    (BufferedReader) reader;
         else                 br = new BufferedReader (reader);
-        Schema result = read (br);
-        result.read (node, br);
-        if (! alreadyBuffered) br.close ();
-        return result;
+        try
+        {
+            Schema result = read (br);
+            if (result != null) result.read (node, br);
+            return result;
+        }
+        finally
+        {
+            if (! alreadyBuffered) br.close ();
+        }
     }
 
+    /**
+        @return A new schema object to handle the contents of the stream.
+        If the stream doesn't start with a valid magic string, then return value is null.
+    **/
     public static Schema read (BufferedReader reader) throws IOException
     {
         String line = reader.readLine ();
-        if (line == null) throw new IOException ("File is empty.");
+        if (line == null) return null;
         line = line.trim ();
-        if (! line.startsWith ("N2A.schema")) throw new IOException ("Schema line not found.");
-        if (line.length () < 12) throw new IOException ("Malformed schema line.");
+        if (! line.startsWith ("N2A.schema")) return null;
+        if (line.length () < 12) return null;
         char delimiter = line.charAt (10);
-        if (delimiter != '=') throw new IOException ("Malformed schema line.");
+        if (delimiter != '=') return null;
         line = line.substring (11);
         String[] pieces = line.split (",", 2);
         int version = Integer.parseInt (pieces[0]);
@@ -74,9 +86,9 @@ public class Schema
         return new Schema2 (version, type);
     }
 
-    public void read (MNode node, Reader reader)
+    public void read (MNode node, Reader reader) throws IOException
     {
-        throw new RuntimeException ("Must use specific schema to read file.");
+        throw new IOException ("Must use specific schema to read file.");
     }
 
     /**
@@ -100,10 +112,9 @@ public class Schema
     /**
         Convenience function for calling write(MNode,Writer,String) with no initial indent.
     **/
-    public void write (MNode node, Writer writer)
+    public void write (MNode node, Writer writer) throws IOException
     {
-        try {write (node, writer, "");}
-        catch (IOException e) {}
+        write (node, writer, "");
     }
 
     public void write (MNode node, Writer writer, String indent) throws IOException

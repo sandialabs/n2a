@@ -920,6 +920,7 @@ public class InternalBackendData
             }
         }
 
+        // TODO: re-evaluate why we can't use simplify() here. Much better if it's possible. Maybe with some fixup code to copy relevant data into the cloned sets.
         s.determineOrderInit ("$init", localInit);
         s.determineOrderInit ("$init", globalInit);
 

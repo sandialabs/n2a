@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2024 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -71,6 +71,23 @@ public class Scalar extends Type
     {
         try
         {
+            return Scalar.parseDouble (a);
+        }
+        catch (NumberFormatException e)
+        {
+            return defaultValue;
+        }
+    }
+
+    /**
+        Converts a plain number without unit.
+        This is an extension of Double.parseDouble() that also handles infinity and nan.
+        This version re-throws the NumberFormatException if the parse fails.
+    **/
+    public static double parseDouble (String a)
+    {
+        try
+        {
             return Double.parseDouble (a);
         }
         catch (NumberFormatException e)
@@ -84,11 +101,23 @@ public class Scalar extends Type
             }
             if (a.contains ("inf")  ||  a.contains ("∞")) return negate * Double.POSITIVE_INFINITY;
             if (a.contains ("nan")) return Double.NaN;
-            return defaultValue;
+            throw e;
         }
     }
 
     public static float parseFloat (String a, float defaultValue)
+    {
+        try
+        {
+            return Scalar.parseFloat (a);
+        }
+        catch (NumberFormatException e)
+        {
+            return defaultValue;
+        }
+    }
+
+    public static float parseFloat (String a)
     {
         try
         {
@@ -105,7 +134,7 @@ public class Scalar extends Type
             }
             if (a.endsWith ("inf")  ||  a.endsWith ("∞")) return negate * Float.POSITIVE_INFINITY;
             if (a.endsWith ("nan")) return Float.NaN;
-            return defaultValue;
+            throw e;
         }
     }
 
