@@ -45,12 +45,32 @@ public class Region extends Matrix
         A.set (row + offsetRow, column + offsetColumn, a);
     }
 
-    public Matrix clear (double initialValue)
+    public void clear (double initialValue)
+    {
+        int endColumn = offsetColumn + columns;
+        int endRow    = offsetRow    + rows;
+        for (int c = offsetColumn; c < endColumn; c++)
+        {
+            for (int r = offsetRow; r < endRow; r++)
+            {
+                A.set (r, c, initialValue);
+            }
+        }
+    }
+
+    public Matrix copy (double initialValue)
     {
         return new MatrixDense (rows, columns, initialValue);
     }
 
-    public Matrix identity ()
+    public void identity ()
+    {
+        clear ();
+        int h = Math.min (rows, columns);
+        for (int r = 0; r < h; r++) A.set (r, r, 1);
+    }
+
+    public Matrix copyIdentity ()
     {
         MatrixDense result = new MatrixDense (rows, columns);
         int h = Math.min (rows, columns);

@@ -138,9 +138,9 @@ public class Scalar extends Type
         }
     }
 
-    public Type clear ()
+    public void clear ()
     {
-        return new Scalar (0);
+        value = 0;
     }
 
     public boolean isZero ()

@@ -175,7 +175,17 @@ public class MatrixSparse extends Matrix
         emptyValue = a;
     }
 
-    public MatrixSparse clear (double initialValue)
+    /**
+        Sets emptyValue to initialValue, and clears all elements.
+        This seems like a reasonable interpretation, given the user intent of sparsity.
+    **/
+    public void clear (double initialValue)
+    {
+        emptyValue = initialValue;
+        for (HashMap<Integer,Double> c : data) c.clear ();
+    }
+
+    public MatrixSparse copy (double initialValue)
     {
         return new MatrixSparse (rows (), columns (), initialValue);
     }
@@ -206,10 +216,17 @@ public class MatrixSparse extends Matrix
         if (column < data.size ()) data.remove (column);
     }
 
+    public void identity ()
+    {
+        clear ();
+        int h = Math.min (rows (), columns ());
+        for (int r = 0; r < h; r++) set (r, r, 1);
+    }
+
     /**
         @return A copy of this object, with diagonal elements set to 1 and off-diagonals set to zero.
-     */
-    public MatrixSparse identity ()
+    **/
+    public MatrixSparse copyIdentity ()
     {
         int w = columns ();
         int h = rows ();

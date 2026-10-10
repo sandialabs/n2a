@@ -1,5 +1,5 @@
 /*
-Copyright 2017-2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2017-2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -122,9 +122,30 @@ public class MatrixBoolean extends Matrix
         }
     }
 
-    public Matrix clear (double initialValue)
+    public void clear (double initialValue)
     {
-        return new MatrixBoolean (rowCount, data.size ());
+        boolean iv = initialValue != 0;
+        int columns = data.size ();
+        for (int c = 0; c < columns; c++)
+        {
+            boolean[] column = data.get (c);
+            for (int r = 0; r < column.length; r++) column[r] = iv;
+        }
+    }
+
+    public MatrixBoolean copy (double initialValue)
+    {
+        int columns = data.size ();
+        MatrixBoolean result = new MatrixBoolean (rowCount, columns);
+        if (initialValue != 0)
+        {
+            for (int c = 0; c < columns; c++)
+            {
+                boolean[] column = result.data.get (c);
+                for (int r = 0; r < column.length; r++) column[r] = true;
+            }
+        }
+        return result;
     }
 
     public void clear (int row, int col)
@@ -146,7 +167,14 @@ public class MatrixBoolean extends Matrix
         for (int r = 0; r < column.length; r++) column[r] = false;
     }
 
-    public Matrix identity ()
+    public void identity ()
+    {
+        clear ();
+        int rc = Math.min (rowCount, data.size ());
+        for (int i = 0; i < rc; i++) set (i, i);
+    }
+
+    public MatrixBoolean copyIdentity ()
     {
         MatrixBoolean result = new MatrixBoolean (rowCount, data.size ());
         int rc = Math.min (rowCount, data.size ());

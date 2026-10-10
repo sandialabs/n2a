@@ -12,10 +12,7 @@ package gov.sandia.n2a.language;
 **/
 public abstract class Type implements Comparable<Type>
 {
-    /**
-        @return A copy of this type with the same structure, but with a value equivalent to 0.
-    **/
-    public Type clear () throws EvaluationException
+    public void clear () throws EvaluationException
     {
         throw new EvaluationException ("Operation not supported on this type.");
     }
@@ -125,6 +122,15 @@ public abstract class Type implements Comparable<Type>
         throw new EvaluationException ("Operation not supported on this type.");
     }
 
+    /**
+        Establishes what type dominates in an operation. The precedence, from highest to lowest, is:
+        <ol>
+        <li>Instance
+        <li>Text
+        <li>Matrix
+        <li>Scalar
+        </ol>
+    **/
     public boolean betterThan (Type that)
     {
         return false;

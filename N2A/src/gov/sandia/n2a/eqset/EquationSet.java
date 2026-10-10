@@ -3791,7 +3791,7 @@ public class EquationSet implements Comparable<EquationSet>
                 }
                 else
                 {
-                    v.type = v.type.clear ();
+                    v.type.clear ();
                 }
             }
         }

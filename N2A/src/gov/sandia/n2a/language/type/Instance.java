@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -217,17 +217,17 @@ public class Instance extends Type
             case Variable.MULTIPLY:
             case Variable.DIVIDE:
                 setFinal (v, current.multiply (buffered));
-                if (v.type instanceof Matrix) set (v, ((Matrix) v.type).identity ());
+                if (v.type instanceof Matrix) set (v, ((Matrix) v.type).copyIdentity ());
                 else                          set (v, new Scalar (1));
                 break;
             case Variable.MIN:
                 setFinal (v, current.min (buffered));
-                if (v.type instanceof Matrix) set (v, ((Matrix) v.type).clear (Double.POSITIVE_INFINITY));
+                if (v.type instanceof Matrix) set (v, ((Matrix) v.type).copy (Double.POSITIVE_INFINITY));
                 else                          set (v, new Scalar (Double.POSITIVE_INFINITY));
                 break;
             case Variable.MAX:
                 setFinal (v, current.max (buffered));
-                if (v.type instanceof Matrix) set (v, ((Matrix) v.type).clear (Double.NEGATIVE_INFINITY));
+                if (v.type instanceof Matrix) set (v, ((Matrix) v.type).copy (Double.NEGATIVE_INFINITY));
                 else                          set (v, new Scalar (Double.NEGATIVE_INFINITY));
                 break;
             default:  // REPLACE
@@ -252,15 +252,15 @@ public class Instance extends Type
                 case Variable.MULTIPLY:
                 case Variable.DIVIDE:
                     // multiplicative identity
-                    if (v.type instanceof Matrix) set (v, ((Matrix) v.type).identity ());
+                    if (v.type instanceof Matrix) set (v, ((Matrix) v.type).copyIdentity ());
                     else                          set (v, new Scalar (1));
                     break;
                 case Variable.MIN:
-                    if (v.type instanceof Matrix) set (v, ((Matrix) v.type).clear (Double.POSITIVE_INFINITY));
+                    if (v.type instanceof Matrix) set (v, ((Matrix) v.type).copy (Double.POSITIVE_INFINITY));
                     else                          set (v, new Scalar (Double.POSITIVE_INFINITY));
                     break;
                 case Variable.MAX:
-                    if (v.type instanceof Matrix) set (v, ((Matrix) v.type).clear (Double.NEGATIVE_INFINITY));
+                    if (v.type instanceof Matrix) set (v, ((Matrix) v.type).copy (Double.NEGATIVE_INFINITY));
                     else                          set (v, new Scalar (Double.NEGATIVE_INFINITY));
                     break;
                 // Must handle every assignment type. If any new ones are developed, add appropriate action here.
@@ -283,15 +283,15 @@ public class Instance extends Type
                     break;
                 case Variable.MULTIPLY:
                 case Variable.DIVIDE:
-                    if (v.type instanceof Matrix) setFinal (v, ((Matrix) v.type).identity ());
+                    if (v.type instanceof Matrix) setFinal (v, ((Matrix) v.type).copyIdentity ());
                     else                          setFinal (v, new Scalar (1));
                     break;
                 case Variable.MIN:
-                    if (v.type instanceof Matrix) setFinal (v, ((Matrix) v.type).clear (Double.POSITIVE_INFINITY));
+                    if (v.type instanceof Matrix) setFinal (v, ((Matrix) v.type).copy (Double.POSITIVE_INFINITY));
                     else                          setFinal (v, new Scalar (Double.POSITIVE_INFINITY));
                     break;
                 case Variable.MAX:
-                    if (v.type instanceof Matrix) setFinal (v, ((Matrix) v.type).clear (Double.NEGATIVE_INFINITY));
+                    if (v.type instanceof Matrix) setFinal (v, ((Matrix) v.type).copy (Double.NEGATIVE_INFINITY));
                     else                          setFinal (v, new Scalar (Double.NEGATIVE_INFINITY));
                     break;
             }

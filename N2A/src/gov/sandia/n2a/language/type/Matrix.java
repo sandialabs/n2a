@@ -18,6 +18,7 @@ import java.util.Iterator;
 
 import gov.sandia.n2a.language.EvaluationException;
 import gov.sandia.n2a.language.Type;
+import gov.sandia.n2a.linear.FactorizationQR;
 import gov.sandia.n2a.linear.MatrixDense;
 import gov.sandia.n2a.linear.MatrixSparse;
 import gov.sandia.n2a.linear.Region;
@@ -215,17 +216,46 @@ public abstract class Matrix extends Type
         // Base class is not sparse, so ignore here.
     }
 
-    public Type clear ()
+    /**
+        Sets all our elements to 0.
+    **/
+    public void clear ()
     {
-        return clear (0);
+        clear (0);
     }
 
     /**
-        @return copy of this object with all elements set to zero.
+        Sets all our elements to initialValue.
     **/
-    public Matrix clear (double initialValue)
+    public void clear (double initialValue)
     {
-        return new MatrixDense (rows (), columns ());
+        int h = rows ();
+        int w = columns ();
+        for (int c = 0; c < w; c++)
+        {
+            for (int r = 0; r < h; r++)
+            {
+                set (r, c, initialValue);  // If the underlying matrix is spares and initialValue == emptyValue, then the matrix will be emptied of all elements.
+            }
+        }
+    }
+
+    /**
+        Creates a copy of this matrix with all elements set to zero.
+    **/
+    public Matrix copy ()
+    {
+        return copy (0);
+    }
+
+    /**
+        Creates a copy of this matrix with all elements set to initialValue.
+    **/
+    public Matrix copy (double initialValue)
+    {
+        MatrixDense result = new MatrixDense (rows (), columns ());
+        if (initialValue != 0) result.clear (initialValue);
+        return result;
     }
 
     /**
@@ -249,15 +279,22 @@ public abstract class Matrix extends Type
     }
 
     /**
-        @return copy of this object with diagonal elements set to 1 and off-diagonals set to zero.
+        Sets diagonal elements to 1 and off-diagonals to zero.
     **/
-    public Matrix identity ()
+    public void identity ()
     {
-        int rows    = rows ();
-        int columns = columns ();
-        MatrixDense result = new MatrixDense (rows, columns);
-        int h = Math.min (rows, columns);
-        for (int r = 0; r < h; r++) result.set (r, r, 1);
+        clear ();
+        int h = Math.min (rows (), columns ());
+        for (int r = 0; r < h; r++) set (r, r, 1);
+    }
+
+    /**
+        Creates a copy of this matrix with diagonal elements set to 1 and off-diagonals set to zero.
+    **/
+    public Matrix copyIdentity ()
+    {
+        Matrix result = copy ();
+        result.identity ();
         return result;
     }
 
@@ -634,9 +671,13 @@ public abstract class Matrix extends Type
     {
         int w = columns ();
         int h = rows ();
-        if (h != w) throw new EvaluationException ("Can't invert non-square matrix (because we don't know about pseudo-inverse).");  // should create pseudo-inverse
-        if (h == 1) return new Scalar (1 / get (0, 0));
-        if (h == 2)
+        if (w == 1  &&  h == 1)
+        {
+            MatrixDense result = new MatrixDense (1, 1);
+            result.set (0, 0, 1 / get (0, 0));
+            return result;
+        }
+        if (w == 2  &&  h == 2)
         {
             MatrixDense result = new MatrixDense (2, 2);
 
@@ -650,7 +691,7 @@ public abstract class Matrix extends Type
 
             return result;
         }
-        if (h == 3)
+        if (w == 3  &&  h == 3)
         {
             MatrixDense result = new MatrixDense (3, 3);
 
@@ -669,7 +710,19 @@ public abstract class Matrix extends Type
 
             return result;
         }
-        throw new EvaluationException ("Can't invert matrices larger then 3x3 (because we are not using a good numerical library).");
+
+        // General cases -- Use QR decomposition to compute exact or Moore-Penrose inverse.
+        if (h >= w)
+        {
+            FactorizationQR qr = new FactorizationQR (this);
+            return qr.invert ();  // Exact inverse if square. Left inverse if h > w.
+        }
+        else  // h < w
+        {
+            // FactorizationQR can only be applied when h >= w. Instead, we apply it to the transpose to create the right inverse.
+            FactorizationQR qr = new FactorizationQR (transpose ());
+            return qr.invert ();
+        }
     }
 
     public Matrix negate () throws EvaluationException

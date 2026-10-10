@@ -479,14 +479,10 @@ public class MatrixDense extends Matrix
         data[offset + row * strideR] = a;
     }
 
-    public MatrixDense clear ()
+    public void clear (double initialValue)
     {
-        return new MatrixDense (rows, columns);
-    }
-
-    public MatrixDense clear (double initialValue)
-    {
-        return new MatrixDense (rows, columns, initialValue);
+        // TODO: This may produce unexpected results on regions, if the user expects to clear only the region itself rather than the entire base matrix.
+        for (int i = 0; i < data.length; i++) data[i] = 0;
     }
 
     /**
@@ -531,15 +527,11 @@ public class MatrixDense extends Matrix
         columns--;
     }
 
-    /**
-        @return A copy of this object, with diagonal elements set to 1 and off-diagonals set to zero.
-     */
-    public MatrixDense identity ()
+    public void identity ()
     {
-        MatrixDense result = new MatrixDense (rows, columns);
+        clear ();
         int h = Math.min (rows, columns);
-        for (int r = 0; r < h; r++) result.data[r * (columns + 1)] = 1;
-        return result;
+        for (int r = 0; r < h; r++) data[r * (rows + 1)] = 1;
     }
 
     /**

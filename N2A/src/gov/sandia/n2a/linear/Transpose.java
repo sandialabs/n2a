@@ -37,12 +37,24 @@ public class Transpose extends Matrix
         A.set (column, row, a);
     }
 
-    public Matrix clear (double initialValue)
+    public void clear (double initialValue)
+    {
+        A.clear (initialValue);
+    }
+
+    public Matrix copy (double initialValue)
     {
         return new MatrixDense (A.columns (), A.rows (), initialValue);
     }
 
-    public Matrix identity ()
+    public void identity ()
+    {
+        A.clear ();
+        int h = Math.min (A.rows (), A.columns ());
+        for (int r = 0; r < h; r++) A.set (r, r, 1);
+    }
+
+    public Matrix copyIdentity ()
     {
         int rows    = A.columns ();
         int columns = A.rows ();
