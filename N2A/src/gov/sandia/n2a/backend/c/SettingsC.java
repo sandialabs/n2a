@@ -38,6 +38,7 @@ public class SettingsC extends SettingsBackend
     protected MTextField   fieldFFmpeg   = new MTextField (40);
     protected MTextField   fieldHDF      = new MTextField (40);
     protected MTextField   fieldJNI      = new MTextField (40);
+    protected JPanel       panelJNI;
     protected MTextField   fieldGL       = new MTextField (40);
     protected MCheckBox    fieldShowCC   = new MCheckBox ("Show source files (.cc) on Runs tab");
     protected JButton      buttonRebuild = new JButton ("Rebuild Runtime");
@@ -107,6 +108,7 @@ public class SettingsC extends SettingsBackend
                 clearMessage (h);
             }
         });
+        panelJNI = Lay.FL (new JLabel ("Directory that contains jni_md.h"), fieldJNI);
 
         fieldGL.addChangeListener (new ChangeListener ()
         {
@@ -196,6 +198,7 @@ public class SettingsC extends SettingsBackend
         fieldGL    .bind (parent, "gl",     glLib        == null ? ""    : glLib       .toString ());
 
         boolean localhost = h.name.equals ("localhost");
+        panelJNI     .setVisible (localhost);
         labelMessages.setVisible (localhost);
         textMessages .setVisible (localhost);
     }
@@ -213,7 +216,7 @@ public class SettingsC extends SettingsBackend
             Lay.FL (new JLabel ("Compiler path"), fieldCpp),
             Lay.FL (new JLabel ("Directory that contains FFmpeg libraries"), fieldFFmpeg),
             Lay.FL (new JLabel ("Directory that contains HDF libraries"), fieldHDF),
-            Lay.FL (new JLabel ("Directory that contains jni_md.h"), fieldJNI),
+            panelJNI,
             Lay.FL (new JLabel ("OpenGL link library"), fieldGL),
             Lay.FL (fieldShowCC),
             Lay.FL (buttonRebuild),

@@ -29,7 +29,7 @@ MatrixSparse<T>::MatrixSparse ()
 }
 
 template<class T>
-MatrixSparse<T>::MatrixSparse (const int rows, const int columns)
+MatrixSparse<T>::MatrixSparse (int rows, int columns)
 :   data (std::make_shared<std::vector<std::map<int,T>>> ())
 {
     rows_      = rows;
@@ -73,7 +73,7 @@ MatrixSparse<T>::classID () const
 
 template<class T>
 void
-MatrixSparse<T>::set (const int row, const int column, const T value)
+MatrixSparse<T>::set (int row, int column, T value)
 {
     if (value == (T) 0)
     {
@@ -98,7 +98,7 @@ MatrixSparse<T>::set (const int row, const int column, const T value)
 
 template<class T>
 T &
-MatrixSparse<T>::operator () (const int row, const int column) const
+MatrixSparse<T>::operator () (int row, int column) const
 {
     if (column < data->size ())
     {
@@ -150,7 +150,7 @@ MatrixSparseRegion<T>::classID () const
 
 template<class T>
 void
-MatrixSparseRegion<T>::set (const int row, const int column, const T value)
+MatrixSparseRegion<T>::set (int row, int column, T value)
 {
     int r = ar + row;
     int c = ac + column;
@@ -161,7 +161,7 @@ MatrixSparseRegion<T>::set (const int row, const int column, const T value)
 
 template<class T>
 T &
-MatrixSparseRegion<T>::operator () (const int row, const int column) const
+MatrixSparseRegion<T>::operator () (int row, int column) const
 {
     return MatrixSparse<T>::operator() (ar + row, ac + column);
 }

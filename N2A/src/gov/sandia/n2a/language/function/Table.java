@@ -54,8 +54,11 @@ import tech.units.indriya.AbstractUnit;
 
 public class Table extends Function implements NonzeroIterable
 {
-    public String name;     // For C backend, the name of the holder object.
-    public String fileName; // For C backend, the name of the string variable holding the file name, if any.
+    public String name;             // For C backend, the name of the holder object.
+    public String fileName;         // For C backend, the name of the string variable holding the file name, if any.
+    public String indexColumnName;  // For C backend, the name of the int variable that holds the index column immediately after lookup.
+    public String rowName;          // For C backend, the name of the int variable that holds the row immediately after retrieval from index.
+    public String columnName;       // For C backend, the name of the int variable that holds the column, if that column is given as a string.
 
     public static Factory factory ()
     {
@@ -900,10 +903,14 @@ public class Table extends Function implements NonzeroIterable
         public    int               ar;                                     // anchor row
         public    int               ac;                                     // anchor column
 
-        public HolderSheet (String fileName)
+        /**
+            @param filePath Because this class also acts as a general utility for working with spreadsheets,
+            the path should be fully resolved before calling this ctor. We don't concern ourselves with the
+            Simulator object.
+        **/
+        public HolderSheet (Path filePath)
         {
             final double fillThreshold = 0.5;
-            Path filePath = Simulator.instance.get ().jobDir.resolve (fileName);
 
             // File-type triage -- If it's zip, then process as Excel spreadsheet. All others are treated as XSV.
             boolean isZip = false;
@@ -934,8 +941,9 @@ public class Table extends Function implements NonzeroIterable
 
                 class ProcessXSV extends ParseXSV
                 {
-                    int fillN = 0;
-                    int fillS = 0;
+                    int fillN      = 0;
+                    int fillS      = 0;
+                    int zeroString = 0;  // Utility string used to disambiguate empty fields versus zero-equivalent. 0 means not defined yet.
 
                     public boolean processLine (List<String> parts)
                     {
@@ -948,14 +956,28 @@ public class Table extends Function implements NonzeroIterable
                             // First try to interpret as number. On failure, store as string.
                             try
                             {
-                                ws.numbers.set (ws.rows, c, Scalar.parseDouble (temp));
+                                double value = Scalar.parseDouble (temp);
+                                ws.numbers.set (ws.rows, c, value);
                                 fillN++;
+                                if (value == 0)
+                                {
+                                    // A zero entry is ambiguous, because it is not represented by either S or N.
+                                    // It could either be a true blank, or a number equivalent to zero.
+                                    // To disambiguate, we store a literal "0" in S. It would be better to store the original field text,
+                                    // but that costs either more time to find a matching string or more space to store redundant text equivalent to zero.
+                                    if (zeroString == 0)
+                                    {
+                                        strings.add ("0");
+                                        zeroString = strings.size ();
+                                    }
+                                    ws.strings.set (ws.rows, c, zeroString);
+                                    fillS++;
+                                }
                             }
                             catch (NumberFormatException e)
                             {
                                 strings.add (temp);
-                                int stringIndex = strings.size ();
-                                ws.strings.set (ws.rows, c, stringIndex);
+                                ws.strings.set (ws.rows, c, strings.size ());
                                 fillS++;
                             }
                         }
@@ -1025,6 +1047,7 @@ public class Table extends Function implements NonzeroIterable
                 }
 
                 // Load shared strings
+                int zeroString = 0;
                 if (! sharedStringsPath.isEmpty ())
                 {
                     entry = archive.getEntry (sharedStringsPath);
@@ -1036,7 +1059,9 @@ public class Table extends Function implements NonzeroIterable
                         if (uniqueCount > 0) strings = new ArrayList<String> (uniqueCount);  // re-allocate array, now that we know the size
                         for (org.w3c.dom.Node si = docElement.getFirstChild (); si != null; si = si.getNextSibling ())
                         {
-                            strings.add (extractSI (si));
+                            String value = extractSI (si);
+                            strings.add (value);
+                            if (value.equals ("0")) zeroString = strings.size ();
                         }
                     }
                 }
@@ -1144,7 +1169,17 @@ public class Table extends Function implements NonzeroIterable
                                     double d = Double.valueOf (v.getTextContent ());
                                     int s = XMLutility.getAttribute (c, "s", -1);
                                     if (dateStyles.contains (s)) d = (d - 25569) * 86400;  // Convert from Excel time to Unix time.
-                                    if (d == 0) continue;  // should we also check for NAN?
+                                    if (d == 0)
+                                    {
+                                        if (zeroString == 0)
+                                        {
+                                            strings.add ("0");
+                                            zeroString = strings.size ();
+                                        }
+                                        S.set (ar, ac, zeroString);
+                                        fillS++;
+                                        continue;
+                                    }
                                     N.set (ar, ac, d);
                                     fillN++;
                             }
@@ -1441,7 +1476,7 @@ public class Table extends Function implements NonzeroIterable
 
             // No string, so try returning number.
             double value = getDouble (row, column);
-            if (value == 0) return "";
+            if (value == 0) return "";  // If the field were non-empty but containing a number equivalent to zero, we would have found it in ws.strings.
             return Scalar.print (value);
         }
 
@@ -1483,8 +1518,8 @@ public class Table extends Function implements NonzeroIterable
         Object H = simulator.holders.get (key);
         if (H == null)
         {
-            if (hdf.isBlank ()) H = new HolderSheet (fileName);
-            else                H = new HolderHDF   (fileName, hdf);
+            if (hdf.isBlank ()) H = new HolderSheet (simulator.jobDir.resolve (fileName));  // HolderSheet also acts as a utility object outside of simulation, so always pass fully-resolved path to it.
+            else                H = new HolderHDF   (fileName, hdf);                        // HolderHDF uses thread-local Simulator object to resolve path.
             simulator.holders.put (key, H);
             return (Holder) H;
         }
@@ -1535,16 +1570,19 @@ public class Table extends Function implements NonzeroIterable
             }
             else  // Look up value in index column specified by key.
             {
-                int keyIndex = H.getColumnIndex (key.getString ());
+                Constant c = (Constant) key;  // key is required to be constant.
+                int keyIndex = -1;
+                if      (c.value instanceof Text)   keyIndex = H.getColumnIndex (((Text)   c.value).value);
+                else if (c.value instanceof Scalar) keyIndex = (int)             ((Scalar) c.value).value;
                 if (keyIndex >= 0)
                 {
-                    if      (op1 instanceof Text)   row = H.getRowIndex (keyIndex, op1.toString ());
+                    if      (op1 instanceof Text)   row = H.getRowIndex (keyIndex, ((Text)   op1).value);
                     else if (op1 instanceof Scalar) row = H.getRowIndex (keyIndex, ((Scalar) op1).value);
                 }
             }
 
-            if      (op2 instanceof Text)   col = H.getColumnIndex (op2.toString ());
-            else if (op2 instanceof Scalar) col = ((Scalar) op2).value;
+            if      (op2 instanceof Text)   col = H.getColumnIndex (((Text)   op2).value);
+            else if (op2 instanceof Scalar) col =                   ((Scalar) op2).value;
 
             if (row < 0  ||  col < 0)
             {

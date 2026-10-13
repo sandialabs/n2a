@@ -35,74 +35,74 @@ template class MatrixSparse<n2a_T>;
 // Most functions and operators are defined outside the matrix classes.
 // These must be individually instantiated.
 
-template SHARED void          clear      (const MatrixAbstract<n2a_T> & A, const n2a_T scalar);
+template SHARED void          clear      (const MatrixAbstract<n2a_T> & A, n2a_T scalar);
 template SHARED void          identity   (const MatrixAbstract<n2a_T> & A);
 template SHARED void          copy       (const MatrixAbstract<n2a_T> & A, const MatrixAbstract<n2a_T> & B);
 template SHARED n2a_T         sumSquares (const MatrixAbstract<n2a_T> & A);
 template SHARED Matrix<n2a_T> cross      (const MatrixAbstract<n2a_T> & A, const MatrixAbstract<n2a_T> & B);
 template SHARED Matrix<n2a_T> visit      (const MatrixAbstract<n2a_T> & A, n2a_T (*function) (const n2a_T &));
-template SHARED Matrix<n2a_T> visit      (const MatrixAbstract<n2a_T> & A, n2a_T (*function) (const n2a_T));
+template SHARED Matrix<n2a_T> visit      (const MatrixAbstract<n2a_T> & A, n2a_T (*function) (n2a_T));
 template SHARED bool          equal      (const MatrixAbstract<n2a_T> & A, const MatrixAbstract<n2a_T> & B);
 
 template SHARED Matrix<n2a_T> operator == (const MatrixAbstract<n2a_T> & A, const MatrixAbstract<n2a_T> & B);
-template SHARED Matrix<n2a_T> operator == (const MatrixAbstract<n2a_T> & A, const n2a_T scalar);
+template SHARED Matrix<n2a_T> operator == (const MatrixAbstract<n2a_T> & A, n2a_T scalar);
 template SHARED Matrix<n2a_T> operator != (const MatrixAbstract<n2a_T> & A, const MatrixAbstract<n2a_T> & B);
-template SHARED Matrix<n2a_T> operator != (const MatrixAbstract<n2a_T> & A, const n2a_T scalar);
+template SHARED Matrix<n2a_T> operator != (const MatrixAbstract<n2a_T> & A, n2a_T scalar);
 template SHARED Matrix<n2a_T> operator <  (const MatrixAbstract<n2a_T> & A, const MatrixAbstract<n2a_T> & B);
-template SHARED Matrix<n2a_T> operator <  (const MatrixAbstract<n2a_T> & A, const n2a_T scalar);
+template SHARED Matrix<n2a_T> operator <  (const MatrixAbstract<n2a_T> & A, n2a_T scalar);
 template SHARED Matrix<n2a_T> operator <= (const MatrixAbstract<n2a_T> & A, const MatrixAbstract<n2a_T> & B);
-template SHARED Matrix<n2a_T> operator <= (const MatrixAbstract<n2a_T> & A, const n2a_T scalar);
+template SHARED Matrix<n2a_T> operator <= (const MatrixAbstract<n2a_T> & A, n2a_T scalar);
 template SHARED Matrix<n2a_T> operator >  (const MatrixAbstract<n2a_T> & A, const MatrixAbstract<n2a_T> & B);
-template SHARED Matrix<n2a_T> operator >  (const MatrixAbstract<n2a_T> & A, const n2a_T scalar);
+template SHARED Matrix<n2a_T> operator >  (const MatrixAbstract<n2a_T> & A, n2a_T scalar);
 template SHARED Matrix<n2a_T> operator >= (const MatrixAbstract<n2a_T> & A, const MatrixAbstract<n2a_T> & B);
-template SHARED Matrix<n2a_T> operator >= (const MatrixAbstract<n2a_T> & A, const n2a_T scalar);
+template SHARED Matrix<n2a_T> operator >= (const MatrixAbstract<n2a_T> & A, n2a_T scalar);
 template SHARED Matrix<n2a_T> operator && (const MatrixAbstract<n2a_T> & A, const MatrixAbstract<n2a_T> & B);
-template SHARED Matrix<n2a_T> operator && (const MatrixAbstract<n2a_T> & A, const n2a_T scalar);
+template SHARED Matrix<n2a_T> operator && (const MatrixAbstract<n2a_T> & A, n2a_T scalar);
 template SHARED Matrix<n2a_T> operator || (const MatrixAbstract<n2a_T> & A, const MatrixAbstract<n2a_T> & B);
-template SHARED Matrix<n2a_T> operator || (const MatrixAbstract<n2a_T> & A, const n2a_T scalar);
+template SHARED Matrix<n2a_T> operator || (const MatrixAbstract<n2a_T> & A, n2a_T scalar);
 
 template SHARED Matrix<n2a_T> operator & (const MatrixAbstract<n2a_T> & A, const MatrixAbstract<n2a_T> & B);
-template SHARED Matrix<n2a_T> operator * (const MatrixAbstract<n2a_T> & A, const n2a_T scalar);
+template SHARED Matrix<n2a_T> operator * (const MatrixAbstract<n2a_T> & A, n2a_T scalar);
 template SHARED Matrix<n2a_T> operator / (const MatrixAbstract<n2a_T> & A, const MatrixAbstract<n2a_T> & B);
-template SHARED Matrix<n2a_T> operator / (const MatrixAbstract<n2a_T> & A, const n2a_T scalar);
-template SHARED Matrix<n2a_T> operator / (const n2a_T scalar,              const MatrixAbstract<n2a_T> & A);
+template SHARED Matrix<n2a_T> operator / (const MatrixAbstract<n2a_T> & A, n2a_T scalar);
+template SHARED Matrix<n2a_T> operator / (n2a_T scalar,                    const MatrixAbstract<n2a_T> & A);
 template SHARED Matrix<n2a_T> operator + (const MatrixAbstract<n2a_T> & A, const MatrixAbstract<n2a_T> & B);
-template SHARED Matrix<n2a_T> operator + (const MatrixAbstract<n2a_T> & A, const n2a_T scalar);
+template SHARED Matrix<n2a_T> operator + (const MatrixAbstract<n2a_T> & A, n2a_T scalar);
 template SHARED Matrix<n2a_T> operator - (const MatrixAbstract<n2a_T> & A, const MatrixAbstract<n2a_T> & B);
-template SHARED Matrix<n2a_T> operator - (const MatrixAbstract<n2a_T> & A, const n2a_T scalar);
-template SHARED Matrix<n2a_T> operator - (const n2a_T scalar,              const MatrixAbstract<n2a_T> & A);
+template SHARED Matrix<n2a_T> operator - (const MatrixAbstract<n2a_T> & A, n2a_T scalar);
+template SHARED Matrix<n2a_T> operator - (n2a_T scalar,                    const MatrixAbstract<n2a_T> & A);
 
 template SHARED void operator *= (MatrixAbstract<n2a_T> & A, const MatrixAbstract<n2a_T> & B);
-template SHARED void operator *= (MatrixAbstract<n2a_T> & A, const n2a_T scalar);
+template SHARED void operator *= (MatrixAbstract<n2a_T> & A, n2a_T scalar);
 template SHARED void operator /= (MatrixAbstract<n2a_T> & A, const MatrixAbstract<n2a_T> & B);
-template SHARED void operator /= (MatrixAbstract<n2a_T> & A, const n2a_T scalar);
+template SHARED void operator /= (MatrixAbstract<n2a_T> & A, n2a_T scalar);
 template SHARED void operator += (MatrixAbstract<n2a_T> & A, const MatrixAbstract<n2a_T> & B);
-template SHARED void operator += (MatrixAbstract<n2a_T> & A, const n2a_T scalar);
+template SHARED void operator += (MatrixAbstract<n2a_T> & A, n2a_T scalar);
 template SHARED void operator -= (MatrixAbstract<n2a_T> & A, const MatrixAbstract<n2a_T> & B);
-template SHARED void operator -= (MatrixAbstract<n2a_T> & A, const n2a_T scalar);
+template SHARED void operator -= (MatrixAbstract<n2a_T> & A, n2a_T scalar);
 
 template SHARED Matrix<n2a_T> min (const MatrixAbstract<n2a_T> & A, const MatrixAbstract<n2a_T> & B);
-template SHARED Matrix<n2a_T> min (const MatrixAbstract<n2a_T> & A, const n2a_T scalar);
+template SHARED Matrix<n2a_T> min (const MatrixAbstract<n2a_T> & A, n2a_T scalar);
 template SHARED Matrix<n2a_T> max (const MatrixAbstract<n2a_T> & A, const MatrixAbstract<n2a_T> & B);
-template SHARED Matrix<n2a_T> max (const MatrixAbstract<n2a_T> & A, const n2a_T scalar);
+template SHARED Matrix<n2a_T> max (const MatrixAbstract<n2a_T> & A, n2a_T scalar);
 
 template SHARED ostream & operator << (ostream & stream, const MatrixAbstract<n2a_T> & A);
 
-template SHARED void          clear (      MatrixStrided<n2a_T> & A, const n2a_T scalar);
+template SHARED void          clear (      MatrixStrided<n2a_T> & A, n2a_T scalar);
 template SHARED Matrix<n2a_T> visit (const MatrixStrided<n2a_T> & A, n2a_T (*function) (const n2a_T &));
-template SHARED Matrix<n2a_T> visit (const MatrixStrided<n2a_T> & A, n2a_T (*function) (const n2a_T));
+template SHARED Matrix<n2a_T> visit (const MatrixStrided<n2a_T> & A, n2a_T (*function) (n2a_T));
 
 template SHARED Matrix<n2a_T> operator & (const MatrixStrided<n2a_T> & A, const MatrixAbstract<n2a_T> & B);
 template SHARED Matrix<n2a_T> operator * (const MatrixStrided<n2a_T> & A, const MatrixAbstract<n2a_T> & B);
-template SHARED Matrix<n2a_T> operator * (const MatrixStrided<n2a_T> & A, const n2a_T scalar);
+template SHARED Matrix<n2a_T> operator * (const MatrixStrided<n2a_T> & A, n2a_T scalar);
 template SHARED Matrix<n2a_T> operator / (const MatrixStrided<n2a_T> & A, const MatrixAbstract<n2a_T> & B);
-template SHARED Matrix<n2a_T> operator / (const MatrixStrided<n2a_T> & A, const n2a_T scalar);
-template SHARED Matrix<n2a_T> operator / (const n2a_T scalar,             const MatrixStrided<n2a_T> & A);
+template SHARED Matrix<n2a_T> operator / (const MatrixStrided<n2a_T> & A, n2a_T scalar);
+template SHARED Matrix<n2a_T> operator / (n2a_T scalar,                   const MatrixStrided<n2a_T> & A);
 template SHARED Matrix<n2a_T> operator + (const MatrixStrided<n2a_T> & A, const MatrixAbstract<n2a_T> & B);
-template SHARED Matrix<n2a_T> operator + (const MatrixStrided<n2a_T> & A, const n2a_T scalar);
+template SHARED Matrix<n2a_T> operator + (const MatrixStrided<n2a_T> & A, n2a_T scalar);
 template SHARED Matrix<n2a_T> operator - (const MatrixStrided<n2a_T> & A, const MatrixAbstract<n2a_T> & B);
-template SHARED Matrix<n2a_T> operator - (const MatrixStrided<n2a_T> & A, const n2a_T scalar);
-template SHARED Matrix<n2a_T> operator - (const n2a_T scalar,             const MatrixStrided<n2a_T> & A);
+template SHARED Matrix<n2a_T> operator - (const MatrixStrided<n2a_T> & A, n2a_T scalar);
+template SHARED Matrix<n2a_T> operator - (n2a_T scalar,                   const MatrixStrided<n2a_T> & A);
 
 template SHARED Matrix<n2a_T> operator ~ (const Matrix<n2a_T> & A);
 template SHARED Matrix<n2a_T> row        (const Matrix<n2a_T> & A, int row);
@@ -117,7 +117,7 @@ template SHARED n2a_T norm (const MatrixStrided<n2a_T>  & A, n2a_T n);
 
 // We don't need a full set of MatrixFixed functions, because user code includes MatrixFixed.tcc
 // We only instantiate functions used within the runtime itself.
-template SHARED MatrixFixed<n2a_T,3,1> operator / (const MatrixFixed<n2a_T,3,1> & A, const n2a_T scalar);
+template SHARED MatrixFixed<n2a_T,3,1> operator / (const MatrixFixed<n2a_T,3,1> & A, n2a_T scalar);
 template SHARED MatrixFixed<n2a_T,3,1> operator - (const MatrixFixed<n2a_T,3,1> & A, const MatrixFixed<n2a_T,3,1> & B);
 
 // Even in a fixed-point build, we still need to instantiate some floating-point matrix support.
@@ -129,7 +129,7 @@ template class MatrixStrided<float>;
 template class Matrix<float>;
 template class MatrixFixed<float,3,1>;
 
-template SHARED void          clear      (      MatrixStrided<float>  & A, const float scalar);
+template SHARED void          clear      (      MatrixStrided<float>  & A, float scalar);
 template SHARED float         norm       (const MatrixStrided<float>  & A, float n);
 template SHARED Matrix<float> normalize  (const MatrixAbstract<float> & A);
 template SHARED Matrix<float> operator * (const MatrixStrided<float>  & A, const MatrixAbstract<float> & B);

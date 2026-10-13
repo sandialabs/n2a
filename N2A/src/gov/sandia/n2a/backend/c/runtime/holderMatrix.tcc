@@ -1007,6 +1007,8 @@ Sheet<T>::Sheet ()
 {
     numbers = 0;
     strings = 0;
+    rows    = 0;
+    columns = 0;
 }
 
 template<class T>
@@ -1397,65 +1399,73 @@ TableSheet<T>::columnIndex (const String & columnName)
 
 template<class T>
 int
-TableSheet<T>::rowIndex (const int keyColumn, const String & keyValue)
+TableSheet<T>::rowIndex (const int keyColumn, T keyValue)
 {
-    if (ws->index.empty ())
-    {
-        if (ws->columnMap.empty ())  // No column headers, so use row 0 as well as the others. TODO: Need a better way to detect presence of column headers. This is unreliable in multiple ways.
-        {
-            for (int i = 0; i < ws->rows; i++) ws->index[i] = i;
-        }
-        else  // Column headers, so skip row 0.
-        {
-            for (int i = 1; i < ws->rows; i++) ws->index[i - 1] = i;
-        }
-
-        std::sort (ws->index.begin (), ws->index.end (), [&](int t1, int t2)
-        {
-            // This implements M sort order, just because it's the most rational way to handle mixed types.
-            int i1 = (*ws->strings)(t1,keyColumn);
-            int i2 = (*ws->strings)(t2,keyColumn);
-            if (i1 == 0)  // t1 is a number
-            {
-                if (i2 == 0) return (*ws->numbers)(t1,keyColumn) < (*ws->numbers)(t2,keyColumn);  // t2 is a number
-                else         return true;  // t2 is a string; number < string
-            }
-            else  // t1 is a string
-            {
-                if (i2 == 0) return false;  // t2 is a number; string > number
-                else         return strings[i1 - 1] < strings[i2 - 1];  // t2 is a string
-            }
-        });
-    }
+    if (ws->index.empty ()) buildIndex (keyColumn);
 
     // Do binary search on indirect values.
-    const char * start = keyValue.c_str ();
-    char * end;
-    double temp  = strtod (start, &end);
-    bool   valid =  end - start == keyValue.size ();
-#   ifdef n2a_FP
-    T keyNumber = convert (temp, exponent);
-#   else
-    T keyNumber = (T) temp;
-#   endif
+    // M order is first all numbers in numerical order, then all strings in lexical order.
+    // The lambda function evaluates element < target value.
     auto it = std::lower_bound (ws->index.begin (), ws->index.end (), -1, [&](int t1, int t2)  // -1 is a pseudo-row that contains the keyValue.
     {
         // t1 is a row number for the table, not a position in the index.
         // t2 is always the target value (-1, aka keyValue)
         int i = (*ws->strings)(t1,keyColumn);
-        if (i == 0)  // t1 is a number
-        {
-            if (valid) return (*ws->numbers)(t1,keyColumn) < keyNumber;  // t2 is a number
-            else       return true;  // t2 is a string. number < string.
-        }
-        else  // t1 is a string
-        {
-            // TODO: Should we treat "valid" as indicating that t2 is truly a number?
-            return strings[i-1] < keyValue;
-        }
+        if (i == 0) return (*ws->numbers)(t1,keyColumn) < keyValue; // t1 is a number
+        else        return false; // t1 is a string; string > number
     });
     if (it == ws->index.end ()) return -1;
     return *it;
+}
+
+template<class T>
+int
+TableSheet<T>::rowIndex (const int keyColumn, const String & keyValue)
+{
+    if (ws->index.empty ()) buildIndex (keyColumn);
+
+    // Do binary search on indirect values.
+    auto it = std::lower_bound (ws->index.begin (), ws->index.end (), -1, [&](int t1, int t2)
+    {
+        int i = (*ws->strings)(t1,keyColumn);
+        if (i == 0) return true;  // t1 is a number; number < string
+        else        return strings[i-1] < keyValue;  // t1 is a string
+    });
+    if (it == ws->index.end ()) return -1;
+    return *it;
+}
+
+template<class T>
+void
+TableSheet<T>::buildIndex (int keyColumn)
+{
+    if (ws->columnMap.empty ())  // No column headers, so use row 0 as well as the others. TODO: Need a better way to detect presence of column headers. This is unreliable in multiple ways.
+    {
+        ws->index.resize (ws->rows);
+        for (int i = 0; i < ws->rows; i++) ws->index[i] = i;
+    }
+    else  // Column headers, so skip row 0.
+    {
+        ws->index.resize (ws->rows - 1);
+        for (int i = 1; i < ws->rows; i++) ws->index[i - 1] = i;
+    }
+
+    std::sort (ws->index.begin (), ws->index.end (), [&](int t1, int t2)
+    {
+        // M order is first all numbers in numerical order, then all strings in lexical order.
+        int i1 = (*ws->strings)(t1,keyColumn);
+        int i2 = (*ws->strings)(t2,keyColumn);
+        if (i1 == 0)  // t1 is a number
+        {
+            if (i2 == 0) return (*ws->numbers)(t1,keyColumn) < (*ws->numbers)(t2,keyColumn);  // t2 is a number
+            else         return true;  // t2 is a string; number < string
+        }
+        else  // t1 is a string
+        {
+            if (i2 == 0) return false;  // t2 is a number; string > number
+            else         return strings[i1 - 1] < strings[i2 - 1];  // t2 is a string
+        }
+    });
 }
 
 template<class T>
@@ -1786,7 +1796,7 @@ IteratorSonataEdgesXSV<T>::next ()
 
 template<class T>
 TableHDF<T>::TableHDF (const String & filePath, const String & resource, T emptyValue)
-:   Table (filePath + "|" + (resource[0] == '/' ? resource.substr (1) : resource), emptyValue),
+:   Table<T> (filePath + "|" + (resource[0] == '/' ? resource.substr (1) : resource), emptyValue),
     resource (resource)
 {
     sonataEdges  = false;
@@ -1808,7 +1818,7 @@ TableHDF<T>::TableHDF (const String & filePath, const String & resource, T empty
 
     try
     {
-        if (rootIsGroup = file.childObjType (resource.c_str ()) == H5G_GROUP)
+        if (rootIsGroup = file.childObjType (resource.c_str ()) == H5O_TYPE_GROUP)
         {
             rootGroup = file.openGroup (resource.c_str ());
         }
@@ -1870,7 +1880,7 @@ TableHDF<T>::TableHDF (const String & filePath, const String & resource, T empty
             }
             hsize_t temp;
             fspace.getSimpleExtentDims (&temp);
-            dims[0] = max (dims[0], temp);
+            dims[0] = std::max (dims[0], temp);  // Note: bug in gcc fails to recognize that "dims" is vector of type hsize_t.
 
             columnMap[name.c_str ()] = headers.size ();
             headers.push_back (name.c_str ());
@@ -1951,6 +1961,13 @@ TableHDF<T>::columnIndex (const String & columnName)
 
 template<class T>
 int
+TableHDF<T>::rowIndex (int keyColumn, T keyValue)
+{
+    return rowIndex (keyColumn, String (keyValue));
+}
+
+template<class T>
+int
 TableHDF<T>::rowIndex (int keyColumn, const String & keyValue)
 {
     if (keyColumn < 0  || keyColumn >= dims[1]) return -1;
@@ -2021,6 +2038,7 @@ TableHDF<T>::rowIndex (int keyColumn, const String & keyValue)
                     free (c);  // HDF5 lib gives us responsibility for the allocated string blocks.
                 }
             }
+            default: throw "TableHDF::rowIndex() can't convert data type";
         }
     }
 
@@ -2138,6 +2156,7 @@ TableHDF<T>::getString (const int row, const int column) const
             free (c);
             return result;
         }
+        default: throw "TableHDF::getString() can't convert data type";
     }
 }
 
@@ -2198,7 +2217,7 @@ IteratorNonzeroHDF<T>::IteratorNonzeroHDF (TableHDF<T> * table)
     column = -1;
     value  = 0;
 
-    count[0] = max (1, (int) (TableHDF<T>::chunkSize / table->dims[1]));
+    count[0] = std::max (1, (int) (TableHDF<T>::chunkSize / table->dims[1]));
     count[1] = table->dims[1];
     start[0] = -count[0];  // Trigger load of first block.
     start[1] = 0;
@@ -2263,7 +2282,7 @@ MatrixSonataEdgesHDF<T>::MatrixSonataEdgesHDF (TableHDF<T> * table)
         H5::DataSpace dataspace = datasetSource.getSpace();
         dataspace.getSimpleExtentDims (&count);
         rowCount = count;  // Should be same as datasetTarget size.
-        count = min (count, (hsize_t) TableHDF<T>::chunkSize);
+        count = std::min (count, (hsize_t) TableHDF<T>::chunkSize);
 
         row = -1;  // Translates to max value, so it rolls over to 0 on first increment.
 
@@ -2305,7 +2324,7 @@ MatrixSonataEdgesHDF<T>::get (const int row, const int column) const
         rr = 0;
         MatrixSonataEdgesHDF<T> * me = const_cast<MatrixSonataEdgesHDF<T>*> (this);
         me->start = track->row;
-        me->count = min (count, (hsize_t) track->rowCount - start);  // Don't read past end of dataset.
+        me->count = std::min (count, (hsize_t) track->rowCount - start);  // Don't read past end of dataset.
 
         std::lock_guard<std::mutex> lock (table->sub->mutexFile);
 
@@ -2327,7 +2346,7 @@ MatrixSonataEdgesHDF<T>::get (const int row, const int column) const
 
 template<class T>
 T &
-MatrixSonataEdgesHDF<T>::operator () (const int row, const int column = 0) const
+MatrixSonataEdgesHDF<T>::operator () (const int row, const int column) const
 {
     MatrixSonataEdgesHDF<T> * me = const_cast<MatrixSonataEdgesHDF<T>*> (this);
     me->tempResult = get (row, column);
@@ -2357,8 +2376,9 @@ IteratorSonataEdgesHDF<T>::IteratorSonataEdgesHDF (MatrixSonataEdgesHDF<T> * A)
 {
     value = 1;  // Always gives value of "true". The return value of next() ensures only legit (source,target) combinations are processed.
 
-    chunkSource.resize (TableHDF<T>::chunkSize);
-    chunkTarget.resize (TableHDF<T>::chunkSize);
+    int count = (int) std::min ((uint64_t) TableHDF<T>::chunkSize, A->rowCount);
+    chunkSource.resize (count);
+    chunkTarget.resize (count);
 }
 
 template<class T>
@@ -2373,7 +2393,7 @@ IteratorSonataEdgesHDF<T>::next ()
     {
         rr = 0;
         A.start = A.row;
-        A.count = min (A.count, A.rowCount - A.row);  // Don't read past end of dataset.
+        A.count = std::min (A.count, A.rowCount - A.row);  // Don't read past end of dataset.
 
         std::lock_guard<std::mutex> lock (A.table->sub->mutexFile);
 
@@ -2413,13 +2433,14 @@ MatrixSonataSpikesHDF<T>::MatrixSonataSpikesHDF (TableHDF<T> * table)
     H5::DataSpace dataspace = datasetID.getSpace();
     dataspace.getSimpleExtentDims (&count);
     uint64_t IDcount = count;
+    chunkID.resize (std::min ((uint64_t) TableHDF<T>::chunkSize, count));
 
     for (uint64_t i = 0; i < IDcount; i++)
     {
         if (i % TableHDF<T>::chunkSize == 0)
         {
             start = i;
-            count = min ((uint64_t) TableHDF<T>::chunkSize, IDcount - i);
+            count = std::min ((uint64_t) TableHDF<T>::chunkSize, IDcount - i);
 
             H5::DataSpace fspace = datasetID.getSpace ();
             fspace.selectHyperslab (H5S_SELECT_SET, &count, &start);
@@ -2434,14 +2455,14 @@ MatrixSonataSpikesHDF<T>::MatrixSonataSpikesHDF (TableHDF<T> * table)
             columnIDs     .push_back (ID);
             columnPointers.push_back (i);
             lastID      = ID;
-            rows_       = max (rows_, i - lastPointer);
+            rows_       = std::max (rows_, i - lastPointer);
             lastPointer = i;
         }
     }
     lastID++;
     columnIDs     .push_back (lastID);
     columnPointers.push_back (count);
-    rows_ = max (rows_, count - lastPointer);
+    rows_ = std::max (rows_, count - lastPointer);
 
     columnPointers.shrink_to_fit ();
 

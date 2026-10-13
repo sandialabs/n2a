@@ -239,6 +239,7 @@ public class CompilerGCC extends Compiler
             command.add (gcc.toString ());
             command.add ("-shared");
             addDebugLink (command);
+            if (profiling) command.add ("-pg");
             if (host instanceof Windows)  // GCC is capable of generating a wrapper library, but does not require one when linking with other code.
             {
                 String stem = output.getFileName ().toString ();

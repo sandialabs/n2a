@@ -70,7 +70,10 @@ void signalHandler (int number)
 #           endif
             break;
         default:
-            exit (number);
+            // quick_exit() avoids static dtors. If those dtors execute in an unfortunate order,
+            // then the Simulator dtor may attempt to access memory in static arrays that are
+            // already freed, such as SubHolderHDF::files.
+            quick_exit (number);
     }
 }
 #endif

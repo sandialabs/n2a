@@ -851,14 +851,17 @@ public class RendererC extends Renderer
             }
             if (call.equals ("get"))
             {
-                int length = t.operands.length;
-                for (int i = 1; i < 3; i++)  // Need row and column arguments. These can't be provided by C++ default, due to ambiguous function resolution.
-                {
-                    if (! first) result.append (", ");
-                    if (i < length) t.operands[i].render (this);
-                    else            result.append ("0");
-                    first = false;
-                }
+                if (! first) result.append (", ");
+
+                if      (t.rowName != null)     result.append (t.rowName);
+                else if (t.operands.length > 1) t.operands[1].render (this);
+                else                            result.append ("0");  // This can't be provided by C++ default, due to ambiguous function resolution.
+
+                result.append (", ");
+
+                if      (t.columnName != null)  result.append (t.columnName);
+                else if (t.operands.length > 2) t.operands[2].render (this);
+                else                            result.append ("0");
             }
             result.append (")");
 

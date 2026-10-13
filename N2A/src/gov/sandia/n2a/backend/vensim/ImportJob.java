@@ -256,7 +256,7 @@ public class ImportJob
                             String fileName = xls.operands.get (0).value;
                             try
                             {
-                                HolderSheet H = new HolderSheet (sourceDir.resolve (fileName).toString ());
+                                HolderSheet H = new HolderSheet (sourceDir.resolve (fileName));
                                 String sheetName = xls.operands.get (1).value;
                                 if (H.wb.containsKey (sheetName))
                                 {

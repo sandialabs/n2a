@@ -249,7 +249,7 @@ public class ReadMatrix extends Function
 
                 if (isSheet)
                 {
-                    Table.HolderSheet H = new Table.HolderSheet (fileName);
+                    Table.HolderSheet H = new Table.HolderSheet (path);
                     synchronized (H)
                     {
                         if (anchor != null) H.parse (anchor.eval (context).toString ());

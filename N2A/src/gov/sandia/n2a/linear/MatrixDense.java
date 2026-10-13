@@ -481,8 +481,21 @@ public class MatrixDense extends Matrix
 
     public void clear (double initialValue)
     {
-        // TODO: This may produce unexpected results on regions, if the user expects to clear only the region itself rather than the entire base matrix.
-        for (int i = 0; i < data.length; i++) data[i] = 0;
+        if (data == null) return;  // May have been created by empty ctor.
+        if (offset == 0  &&  rows * columns == data.length)  // Simple case: no active region.
+        {
+            for (int i = 0; i < data.length; i++) data[i] = initialValue;
+        }
+        else  // Expensive case: only touch elements in active region.
+        {
+            for (int c = 0; c < columns; c++)
+            {
+                for (int r = 0; r < rows; r++)
+                {
+                    data[offset + c * strideC + r * strideR] = initialValue;
+                }
+            }
+        }
     }
 
     /**

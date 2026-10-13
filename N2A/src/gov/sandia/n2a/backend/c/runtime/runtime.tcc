@@ -2014,7 +2014,7 @@ EventSpikeMulti<T>::setLatch ()
 {
     for (int i = targets->size () - 1; i >= 0; i--)
     {
-        (*targets)[i]->setLatch (EventSpike<T>::latch);
+        (*targets)[i]->setLatch (this->latch);
     }
 }
 

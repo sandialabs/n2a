@@ -241,7 +241,7 @@ public class ImportJob
         for (MNode n : config.childOrEmpty ("networks", type + "s"))
         {
             Path typesPath = dir.resolve (n.get (type + "_types_file"));
-            Table.Holder H = new Table.HolderSheet (typesPath.toString ());
+            Table.Holder H = new Table.HolderSheet (typesPath);
 
             int index_population      = H.getColumnIndex ("population");
             int index_type_id         = H.getColumnIndex (type + "_type_id");
@@ -1612,12 +1612,16 @@ public class ImportJob
                         part.set ("dir+\"/" + input_file + "\"",       "spikesFile");
                         part.set ("\"spikes/" + node_set + "\"",       "inputPath");
                         part.set ("matrix(spikesFile, hdf=inputPath)", "times");
-                        part.set ("$t>=times(index, $index)*1ms",      "fire");
+                        part.set ("$t>nextSpikeTime-$t'/2 && $live",   "fire");
+                        part.set ("times(index, $index)*1ms",          "nextSpikeTime", "@$init");
+                        part.set ("times(index+1, $index)*1ms",        "nextSpikeTime", "@fire && $live");
                         break;
                     case "csv":
                         part.set ("dir+\"/" + input_file + "\"",                           "spikesFile");
                         part.set ("matrix(spikesFile, sonataSpikes=\"" + node_set + "\")", "times");
-                        part.set ("$t>=times(index, $index)*1ms",                          "fire");
+                        part.set ("$t>nextSpikeTime-$t'/2 && $live",                       "fire");
+                        part.set ("times(index, $index)*1ms",                              "nextSpikeTime", "@$init");
+                        part.set ("times(index+1, $index)*1ms",                            "nextSpikeTime", "@fire && $live");
                         break;
                     default:
                         throw new AbortRun ("Unrecognized input module: " + module);

@@ -165,7 +165,7 @@ Mfile<T>::getMatrix (const char * delimiter, const std::vector<String> & path)
 
 template<class T>
 String
-Mfile<T>::getChildKey (const char * delimiter, const std::vector<String> & path, const int index)
+Mfile<T>::getChildKey (const char * delimiter, const std::vector<String> & path, int index)
 {
     if (index < 0) return "";
     String key = join (delimiter, path);

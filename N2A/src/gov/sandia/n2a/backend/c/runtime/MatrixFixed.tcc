@@ -166,7 +166,7 @@ operator * (const MatrixFixed<T,R,O> & A, const MatrixFixed<T,O,C> & B)
 
 template<class T, int R, int C>
 MatrixFixed<T,R,C>
-operator * (const MatrixFixed<T,R,C> & A, const T scalar)
+operator * (const MatrixFixed<T,R,C> & A, T scalar)
 {
     MatrixFixed<T,R,C> result;
     const T * a   = A.data[0];
@@ -191,7 +191,7 @@ operator / (const MatrixFixed<T,R,C> & A, const MatrixFixed<T,R,C> & B)
 
 template<class T, int R, int C>
 MatrixFixed<T,R,C>
-operator / (const MatrixFixed<T,R,C> & A, const T scalar)
+operator / (const MatrixFixed<T,R,C> & A, T scalar)
 {
     MatrixFixed<T,R,C> result;
     const T * a   = A.data[0];
@@ -203,7 +203,7 @@ operator / (const MatrixFixed<T,R,C> & A, const T scalar)
 
 template<class T, int R, int C>
 MatrixFixed<T,R,C>
-operator / (const T scalar, const MatrixFixed<T,R,C> & A)
+operator / (T scalar, const MatrixFixed<T,R,C> & A)
 {
     MatrixFixed<T,R,C> result;
     const T * a   = A.data[0];
@@ -228,7 +228,7 @@ operator + (const MatrixFixed<T,R,C> & A, const MatrixFixed<T,R,C> & B)
 
 template<class T, int R, int C>
 MatrixFixed<T,R,C>
-operator + (const MatrixFixed<T,R,C> & A, const T scalar)
+operator + (const MatrixFixed<T,R,C> & A, T scalar)
 {
     MatrixFixed<T,R,C> result;
     const T * a   = A.data[0];
@@ -253,7 +253,7 @@ operator - (const MatrixFixed<T,R,C> & A, const MatrixFixed<T,R,C> & B)
 
 template<class T, int R, int C>
 MatrixFixed<T,R,C>
-operator - (const MatrixFixed<T,R,C> & A, const T scalar)
+operator - (const MatrixFixed<T,R,C> & A, T scalar)
 {
     MatrixFixed<T,R,C> result;
     const T * a   = A.data[0];
@@ -265,7 +265,7 @@ operator - (const MatrixFixed<T,R,C> & A, const T scalar)
 
 template<class T, int R, int C>
 MatrixFixed<T,R,C>
-operator - (const T scalar, const MatrixFixed<T,R,C> & A)
+operator - (T scalar, const MatrixFixed<T,R,C> & A)
 {
     MatrixFixed<T,R,C> result;
     const T * a   = A.data[0];
@@ -277,7 +277,7 @@ operator - (const T scalar, const MatrixFixed<T,R,C> & A)
 
 template<class T, int R, int C>
 void
-operator *= (MatrixFixed<T,R,C> & A, const T scalar)
+operator *= (MatrixFixed<T,R,C> & A, T scalar)
 {
     T * a   = A.data[0];
     T * end = a + R * C;

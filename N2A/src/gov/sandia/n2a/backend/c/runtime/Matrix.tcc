@@ -29,7 +29,7 @@ MatrixAbstract<T>::~MatrixAbstract ()
 
 template<class T>
 void
-clear (const MatrixAbstract<T> & A, const T scalar)
+clear (const MatrixAbstract<T> & A, T scalar)
 {
     int h = A.rows ();
     int w = A.columns ();
@@ -196,7 +196,7 @@ visit (const MatrixAbstract<T> & A, T (*function) (const T &))
 
 template<class T>
 Matrix<T>
-visit (const MatrixAbstract<T> & A, T (*function) (const T))
+visit (const MatrixAbstract<T> & A, T (*function) (T))
 {
     return visit (Matrix<T> (A), function);
 }
@@ -242,7 +242,7 @@ operator == (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B)
 
 template<class T>
 Matrix<T>
-operator == (const MatrixAbstract<T> & A, const T scalar)
+operator == (const MatrixAbstract<T> & A, T scalar)
 {
     int h = A.rows ();
     int w = A.columns ();
@@ -280,7 +280,7 @@ operator != (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B)
 
 template<class T>
 Matrix<T>
-operator != (const MatrixAbstract<T> & A, const T scalar)
+operator != (const MatrixAbstract<T> & A, T scalar)
 {
     int h = A.rows ();
     int w = A.columns ();
@@ -318,7 +318,7 @@ operator < (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B)
 
 template<class T>
 Matrix<T>
-operator < (const MatrixAbstract<T> & A, const T scalar)
+operator < (const MatrixAbstract<T> & A, T scalar)
 {
     int h = A.rows ();
     int w = A.columns ();
@@ -356,7 +356,7 @@ operator <= (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B)
 
 template<class T>
 Matrix<T>
-operator <= (const MatrixAbstract<T> & A, const T scalar)
+operator <= (const MatrixAbstract<T> & A, T scalar)
 {
     int h = A.rows ();
     int w = A.columns ();
@@ -394,7 +394,7 @@ operator > (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B)
 
 template<class T>
 Matrix<T>
-operator > (const MatrixAbstract<T> & A, const T scalar)
+operator > (const MatrixAbstract<T> & A, T scalar)
 {
     int h = A.rows ();
     int w = A.columns ();
@@ -432,7 +432,7 @@ operator >= (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B)
 
 template<class T>
 Matrix<T>
-operator >= (const MatrixAbstract<T> & A, const T scalar)
+operator >= (const MatrixAbstract<T> & A, T scalar)
 {
     int h = A.rows ();
     int w = A.columns ();
@@ -470,7 +470,7 @@ operator && (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B)
 
 template<class T>
 Matrix<T>
-operator && (const MatrixAbstract<T> & A, const T scalar)
+operator && (const MatrixAbstract<T> & A, T scalar)
 {
     int h = A.rows ();
     int w = A.columns ();
@@ -513,7 +513,7 @@ operator || (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B)
 
 template<class T>
 Matrix<T>
-operator || (const MatrixAbstract<T> & A, const T scalar)
+operator || (const MatrixAbstract<T> & A, T scalar)
 {
     int h = A.rows ();
     int w = A.columns ();
@@ -556,7 +556,7 @@ operator & (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B)
 
 template<class T>
 Matrix<T>
-operator * (const MatrixAbstract<T> & A, const T scalar)
+operator * (const MatrixAbstract<T> & A, T scalar)
 {
     int h = A.rows ();
     int w = A.columns ();
@@ -594,7 +594,7 @@ operator / (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B)
 
 template<class T>
 Matrix<T>
-operator / (const MatrixAbstract<T> & A, const T scalar)
+operator / (const MatrixAbstract<T> & A, T scalar)
 {
     int h = A.rows ();
     int w = A.columns ();
@@ -611,7 +611,7 @@ operator / (const MatrixAbstract<T> & A, const T scalar)
 
 template<class T>
 Matrix<T>
-operator / (const T scalar, const MatrixAbstract<T> & A)
+operator / (T scalar, const MatrixAbstract<T> & A)
 {
     int h = A.rows ();
     int w = A.columns ();
@@ -649,7 +649,7 @@ operator + (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B)
 
 template<class T>
 Matrix<T>
-operator + (const MatrixAbstract<T> & A, const T scalar)
+operator + (const MatrixAbstract<T> & A, T scalar)
 {
     int h = A.rows ();
     int w = A.columns ();
@@ -687,7 +687,7 @@ operator - (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B)
 
 template<class T>
 Matrix<T>
-operator - (const MatrixAbstract<T> & A, const T scalar)
+operator - (const MatrixAbstract<T> & A, T scalar)
 {
     int h = A.rows ();
     int w = A.columns ();
@@ -704,7 +704,7 @@ operator - (const MatrixAbstract<T> & A, const T scalar)
 
 template<class T>
 Matrix<T>
-operator - (const T scalar, const MatrixAbstract<T> & A)
+operator - (T scalar, const MatrixAbstract<T> & A)
 {
     int h = A.rows ();
     int w = A.columns ();
@@ -739,7 +739,7 @@ operator *= (MatrixAbstract<T> & A, const MatrixAbstract<T> & B)
 
 template<class T>
 void
-operator *= (MatrixAbstract<T> & A, const T scalar)
+operator *= (MatrixAbstract<T> & A, T scalar)
 {
     int h = A.rows ();
     int w = A.columns ();
@@ -771,7 +771,7 @@ operator /= (MatrixAbstract<T> & A, const MatrixAbstract<T> & B)
 
 template<class T>
 void
-operator /= (MatrixAbstract<T> & A, const T scalar)
+operator /= (MatrixAbstract<T> & A, T scalar)
 {
     int h = A.rows ();
     int w = A.columns ();
@@ -803,7 +803,7 @@ operator += (MatrixAbstract<T> & A, const MatrixAbstract<T> & B)
 
 template<class T>
 void
-operator += (MatrixAbstract<T> & A, const T scalar)
+operator += (MatrixAbstract<T> & A, T scalar)
 {
     int h = A.rows ();
     int w = A.columns ();
@@ -835,7 +835,7 @@ operator -= (MatrixAbstract<T> & A, const MatrixAbstract<T> & B)
 
 template<class T>
 void
-operator -= (MatrixAbstract<T> & A, const T scalar)
+operator -= (MatrixAbstract<T> & A, T scalar)
 {
     int h = A.rows ();
     int w = A.columns ();
@@ -871,7 +871,7 @@ min (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B)
 
 template<class T>
 Matrix<T>
-min (const MatrixAbstract<T> & A, const T scalar)
+min (const MatrixAbstract<T> & A, T scalar)
 {
     int h = A.rows ();
     int w = A.columns ();
@@ -909,7 +909,7 @@ max (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B)
 
 template<class T>
 Matrix<T>
-max (const MatrixAbstract<T> & A, const T scalar)
+max (const MatrixAbstract<T> & A, T scalar)
 {
     int h = A.rows ();
     int w = A.columns ();
@@ -929,8 +929,8 @@ template<class T>
 std::ostream &
 operator << (std::ostream & stream, const MatrixAbstract<T> & A)
 {
-    const int rows = A.rows ();
-    const int columns = A.columns ();
+    int rows = A.rows ();
+    int columns = A.columns ();
 
     // The code below assumes a non-empty matrix, so early out if it is empty.
     if (rows == 0  ||  columns == 0)
@@ -979,7 +979,7 @@ operator << (std::ostream & stream, const MatrixAbstract<T> & A)
 
 template<class T>
 void
-clear (MatrixStrided<T> & A, const T scalar)
+clear (MatrixStrided<T> & A, T scalar)
 {
     int h  = A.rows ();
     int w  = A.columns ();
@@ -1120,7 +1120,7 @@ visit (const MatrixStrided<T> & A, T (*function) (const T &))
 
 template<class T>
 Matrix<T>
-visit (const MatrixStrided<T> & A, T (*function) (const T))
+visit (const MatrixStrided<T> & A, T (*function) (T))
 {
     int h  = A.rows ();
     int w  = A.columns ();
@@ -1254,7 +1254,7 @@ operator * (const MatrixStrided<T> & A, const MatrixAbstract<T> & B)
 
 template<class T>
 Matrix<T>
-operator * (const MatrixStrided<T> & A, const T scalar)
+operator * (const MatrixStrided<T> & A, T scalar)
 {
     int h  = A.rows ();
     int w  = A.columns ();
@@ -1340,7 +1340,7 @@ operator / (const MatrixStrided<T> & A, const MatrixAbstract<T> & B)
 
 template<class T>
 Matrix<T>
-operator / (const MatrixStrided<T> & A, const T scalar)
+operator / (const MatrixStrided<T> & A, T scalar)
 {
     int h  = A.rows ();
     int w  = A.columns ();
@@ -1367,7 +1367,7 @@ operator / (const MatrixStrided<T> & A, const T scalar)
 
 template<class T>
 Matrix<T>
-operator / (const T scalar, const MatrixStrided<T> & A)
+operator / (T scalar, const MatrixStrided<T> & A)
 {
     int h  = A.rows ();
     int w  = A.columns ();
@@ -1453,7 +1453,7 @@ operator + (const MatrixStrided<T> & A, const MatrixAbstract<T> & B)
 
 template<class T>
 Matrix<T>
-operator + (const MatrixStrided<T> & A, const T scalar)
+operator + (const MatrixStrided<T> & A, T scalar)
 {
     int h  = A.rows ();
     int w  = A.columns ();
@@ -1539,7 +1539,7 @@ operator - (const MatrixStrided<T> & A, const MatrixAbstract<T> & B)
 
 template<class T>
 Matrix<T>
-operator - (const MatrixStrided<T> & A, const T scalar)
+operator - (const MatrixStrided<T> & A, T scalar)
 {
     int h  = A.rows ();
     int w  = A.columns ();
@@ -1566,7 +1566,7 @@ operator - (const MatrixStrided<T> & A, const T scalar)
 
 template<class T>
 Matrix<T>
-operator - (const T scalar, const MatrixStrided<T> & A)
+operator - (T scalar, const MatrixStrided<T> & A)
 {
     int h  = A.rows ();
     int w  = A.columns ();
@@ -1605,7 +1605,7 @@ Matrix<T>::Matrix ()
 };
 
 template<class T>
-Matrix<T>::Matrix (const int rows, const int columns)
+Matrix<T>::Matrix (int rows, int columns)
 {
     resize (rows, columns);
 }
@@ -1617,7 +1617,7 @@ Matrix<T>::Matrix (const Matrix<T> & that)
 }
 
 template<class T>
-Matrix<T>::Matrix (const n2a::Pointer & that, const int offset, const int rows, const int columns, const int strideR, const int strideC)
+Matrix<T>::Matrix (const n2a::Pointer & that, int offset, int rows, int columns, int strideR, int strideC)
 :   data     (that),
     offset   (offset),
     rows_    (rows),
@@ -1636,7 +1636,7 @@ Matrix<T>::classID () const
 
 template<class T>
 void
-Matrix<T>::resize (const int rows, const int columns)
+Matrix<T>::resize (int rows, int columns)
 {
     this->data.grow (rows * columns * sizeof (T));
     this->offset   = 0;

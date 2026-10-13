@@ -335,9 +335,10 @@ struct SHARED Table : public HolderMatrix<T>
     virtual int    rowsInColumn  () const;
     virtual int    columnsInRow  () const;
     virtual int    columnIndex   (const String & columnName) = 0;
-    virtual int    rowIndex      (const int keyColumn, const String & keyValue) = 0;
-    virtual T      get           (const int row, const int column) const = 0;
-    virtual String getString     (const int row, const int column) const = 0;
+    virtual int    rowIndex      (int keyColumn, T              keyValue) = 0;
+    virtual int    rowIndex      (int keyColumn, const String & keyValue) = 0;
+    virtual T      get           (int row, int column) const = 0;
+    virtual String getString     (int row, int column) const = 0;
 
     // Functions that take anchor.
     // These wrap the anchor setting and info retrieval in a critical section, so anchor is guaranteed to remain consistent.
@@ -345,8 +346,8 @@ struct SHARED Table : public HolderMatrix<T>
     int    columns      (const String & anchor);
     int    rowsInColumn (const String & anchor);
     int    columnsInRow (const String & anchor);
-    T      get          (const String & anchor, const int row, const int column);
-    String getString    (const String & anchor, const int row, const int column);
+    T      get          (const String & anchor, int row, int column);
+    String getString    (const String & anchor, int row, int column);
 };
 
 /**
@@ -402,16 +403,18 @@ struct SHARED TableSheet : public Table<T>
     virtual int    rowsInColumn () const;
     virtual int    columnsInRow () const;
     virtual int    columnIndex  (const String & columnName);
-    virtual int    rowIndex     (const int keyColumn, const String & keyValue);
-    virtual T      get          (const int row, const int column) const;
-    virtual String getString    (const int row, const int column) const;
+    virtual int    rowIndex     (int keyColumn, T              keyValue);
+    virtual int    rowIndex     (int keyColumn, const String & keyValue);
+    void           buildIndex   (int keyColumn);  // Subroutine of rowIndex()
+    virtual T      get          (int row, int column) const;
+    virtual String getString    (int row, int column) const;
 
-    using Table::rows;
-    using Table::columns;
-    using Table::rowsInColumn;
-    using Table::columnsInRow;
-    using Table::get;
-    using Table::getString;
+    using Table<T>::rows;
+    using Table<T>::columns;
+    using Table<T>::rowsInColumn;
+    using Table<T>::columnsInRow;
+    using Table<T>::get;
+    using Table<T>::getString;
 
     virtual MatrixAbstract<T> * getMatrix (const char * resource = 0);  ///< @param resource A cell anchor, if appropriate.
 };
@@ -483,8 +486,8 @@ struct SHARED MatrixSonataEdgesXSV : public MatrixAbstract<T>
     ~MatrixSonataEdgesXSV ();
     virtual uint32_t classID () const;
 
-    virtual T   get         (const int row, const int column = 0) const;
-    virtual T & operator () (const int row, const int column = 0) const;
+    virtual T   get         (int row, int column = 0) const;
+    virtual T & operator () (int row, int column = 0) const;
     virtual int rows        () const;
     virtual int columns     () const;
 };
@@ -508,6 +511,9 @@ struct SHARED SubHolderHDF
     int        users;
     std::mutex mutexFile;  ///< Serialize access to a given open file, since HDF is not thread-safe.
 
+    // These global objects will be destroyed at exit, perhaps before Simulator is destroyed.
+    // This is fine for a normal exit, because the Simulator teardown is done by main() before exit.
+    // However, calling exit() anywhere can cause access to freed memory. Instead, call std::abort() or quick_exit().
     static std::map<String,SubHolderHDF*> files;  ///< Keep track of all open HDF files in the app (regardless of which simulation they belong to). These can be shared by multiple InputHDF objects.
     static std::mutex                     mutexFiles;
 
@@ -556,17 +562,18 @@ struct SHARED TableHDF : public Table<T>, public MatrixAbstract<T>
     virtual int    rows        () const;
     virtual int    columns     () const;
     virtual int    columnIndex (const String & columnName);
+    virtual int    rowIndex    (int keyColumn, T              keyValue);
     virtual int    rowIndex    (int keyColumn, const String & keyValue);
-    virtual T      get         (const int row, const int column) const;
-    virtual String getString   (const int row, const int column) const;
-    virtual T &    operator () (const int row, const int column) const;  ///< Thin wrapper around get(), just to satisfy the Matrix interface. Doesn't actually allow writing of elements.
+    virtual T      get         (int row, int column) const;
+    virtual String getString   (int row, int column) const;
+    virtual T &    operator () (int row, int column) const;  ///< Thin wrapper around get(), just to satisfy the Matrix interface. Doesn't actually allow writing of elements.
 
-    using Table::rows;
-    using Table::columns;
-    using Table::rowsInColumn;
-    using Table::columnsInRow;
-    using Table::get;
-    using Table::getString;
+    using Table<T>::rows;
+    using Table<T>::columns;
+    using Table<T>::rowsInColumn;
+    using Table<T>::columnsInRow;
+    using Table<T>::get;
+    using Table<T>::getString;
 
     virtual MatrixAbstract<T> * getMatrix (const char * resource = 0);  ///< @param resource Ignored
 };
@@ -580,6 +587,10 @@ template<class T> extern SHARED TableHDF<T> * tableHelperHDF (const String & fil
 template<class T>
 struct SHARED IteratorNonzeroHDF : public IteratorNonzero<T>
 {
+    using IteratorNonzero<T>::row;
+    using IteratorNonzero<T>::column;
+    using IteratorNonzero<T>::value;
+
     TableHDF<T> *  table;
     std::vector<T> chunk;     ///< Buffered 2D chunk, row major, covering whole rows.
     hsize_t        start[2]; ///< Coordinates for current region in "data".
@@ -619,8 +630,8 @@ struct SHARED MatrixSonataEdgesHDF : public MatrixAbstract<T>
     MatrixSonataEdgesHDF (TableHDF<T> * table);
     virtual uint32_t classID () const;
 
-    virtual T   get         (const int row, const int column = 0) const;
-    virtual T & operator () (const int row, const int column = 0) const;
+    virtual T   get         (int row, int column = 0) const;
+    virtual T & operator () (int row, int column = 0) const;
     virtual int rows        () const;
     virtual int columns     () const;
 };
@@ -628,6 +639,10 @@ struct SHARED MatrixSonataEdgesHDF : public MatrixAbstract<T>
 template<class T>
 struct IteratorSonataEdgesHDF : public IteratorNonzero<T>
 {
+    using IteratorNonzero<T>::row;
+    using IteratorNonzero<T>::column;
+    using IteratorNonzero<T>::value;
+
     MatrixSonataEdgesHDF<T> & A;
     std::vector<uint64_t>     chunkSource;
     std::vector<uint64_t>     chunkTarget;
@@ -650,8 +665,8 @@ struct SHARED MatrixSonataSpikesHDF : public MatrixAbstract<T>
     MatrixSonataSpikesHDF (TableHDF<T> * table);
     virtual uint32_t classID () const;
 
-    virtual T   get         (const int row, const int column = 0) const;
-    virtual T & operator () (const int row, const int column = 0) const;
+    virtual T   get         (int row, int column = 0) const;
+    virtual T & operator () (int row, int column = 0) const;
     virtual int rows        () const;
     virtual int columns     () const;
 };
@@ -873,7 +888,7 @@ struct SHARED Mfile : public Holder
 #   else
     MatrixAbstract<T> * getMatrix (const char * delimiter, const std::vector<String> & path);
 #   endif
-    String getChildKey (const char * delimiter, const std::vector<String> & path, const int index);
+    String getChildKey (const char * delimiter, const std::vector<String> & path, int index);
 };
 template<class T> SHARED Mfile<T> * MfileHelper (const String & fileName, Mfile<T> * oldHandle = 0);
 
