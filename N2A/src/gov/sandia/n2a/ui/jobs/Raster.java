@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2013-2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
@@ -37,14 +37,14 @@ public class Raster extends OutputParser implements XYDataset
 {
     protected Path                  path;
     protected List<Color>           colors      = new ArrayList<Color> ();  // correspond 1-to-1 with series added to dataset
-    protected double                timeQuantum = 1;  // The closest spacing between two spikes on a single row.
-    protected boolean               needXmin;  // indicates that xmin was not provided explicitly, and therefore should be calculated from data
-    protected boolean               needXmax;  // ditto for xmax
+    protected float                 timeQuantum = 1;  // In seconds, or if there are no time-stamps, rows. The closest spacing between two spikes on a single series.
+    protected float                 currentTime;      // Of most recent spike event.
+    protected long                  totalSpikes;      // Across all series.
+    protected boolean               needXmin;         // indicates that xmin was not provided explicitly, and therefore should be calculated from data
+    protected boolean               needXmax;         // ditto for xmax
     protected DatasetGroup          group;
-    protected DatasetChangeListener listener;  // no need to keep a list, because it is always only our own chart
-    protected int                   startRow;  // row index of first newly-added value during a refresh cycle
-
-    public static final Color red = Color.getHSBColor (0.0f, 1.0f, 0.8f);
+    protected DatasetChangeListener listener;         // no need to keep a list, because it is always only our own chart
+    protected int                   startRow;         // row index of first newly-added value during a refresh cycle
 
     public Raster (Path path)
     {
@@ -72,56 +72,52 @@ public class Raster extends OutputParser implements XYDataset
                 double scale = time.scale.get ();
                 for (int i = nextRow; i < count; i++) time.values.set (i, (float) (time.values.get (i) / scale));
             }
+            time.data = count;
 
             if (needXmin) xmin = time.values.get (0);
             if (needXmax) xmax = time.values.get (count - 1);
             int lastRow = nextRow - 1;
             if (lastRow < 0) lastRow = 0;
-            double previousTime = time.values.get (lastRow);
-            for (int r = lastRow + 1; r < count; r++)
-            {
-                double thisTime = time.values.get (r);
-                timeQuantum = Math.min (timeQuantum, thisTime - previousTime);
-                previousTime = thisTime;
-            }
-
-            time.data = count;
         }
 
         int columnCount = columns.size ();
         for (int i = colors.size (); i < columnCount; i++)
         {
             Column c = columns.get (i);
-            if (c.color == null) colors.add (red);
+            if (c.color == null) colors.add (Color.black);
             else                 colors.add (c.color);
         }
 
-        // Convert data to event times
+        // Convert data to event times.
+        // Take incoming spike position data and convert it to compact list of spike times.
+        // This removes zero entries. Each column's start row is hacked so that the compacted
+        // data all appears to stop at exactly at the end of current lock of incoming positional data.
+        // This makes it ready to receive the next block.
+        totalSpikes = 0;
         for (Column c : columns)
         {
             if (timeFound  &&  c == time) continue;
 
             int count = c.values.size ();
             int i = Math.max (0, startRow - c.startRow);  // Destination index for next converted value.
+            float previousTime = count > 0 ? c.values.get (i) : Float.POSITIVE_INFINITY;
             for (int r = i; r < count; r++)
             {
                 if (c.values.get (r) == 0) continue;
                 int step = r + c.startRow;
                 float t = timeFound ? time.values.get (step) : step;
                 c.values.set (i++, t);
+                if (t > previousTime) timeQuantum = Math.min (timeQuantum, t - previousTime);
+                previousTime = t;
             }
             c.values.subList (i, count).clear ();  // "i" is effectively the new count
             c.startRow = rows - i;
+            count = c.values.size ();
+            totalSpikes += count;
+            if (count > 0) currentTime = Math.max (currentTime, c.values.get (count - 1));
         }
         startRow = rows;
         listener.datasetChanged (new DatasetChangeEvent (this, this));
-
-        // Lower limit on size of timeQuantum
-        // Small timesteps could be due to jittering for "before" or "after" event delivery.
-        int totalCount = 0;
-        for (Column c : columns) if (! timeFound  ||  c != time) totalCount += c.values.size ();
-        double minTimeQuantum = (xmax - xmin) / totalCount;
-        timeQuantum = Math.max (timeQuantum, minTimeQuantum);
     }
 
     public JFreeChart createChart ()
@@ -190,18 +186,22 @@ public class Raster extends OutputParser implements XYDataset
             Rectangle clipBounds = g2.getClipBounds ();
 
             double rasterLines = plot.getRangeAxis ().getRange ().getLength ();
-            int    height      = (int) Math.floor (clipBounds.height / rasterLines);
+            int    height      = (int) Math.ceil (clipBounds.height / rasterLines);
             if      (height > 10) height -= 2;
             else if (height > 2 ) height -= 1;
-            height = Math.min (20, height);
-            height = Math.max (1,  height);
-            setDotHeight ((int) height);
+            height = Math.min (height, 20);
+            height = Math.max (height, 1);
 
-            double timeSteps = plot.getDomainAxis ().getRange ().getLength () / timeQuantum + 1;
-            int    width     = (int) Math.floor (clipBounds.width / timeSteps);
-            width = Math.min (height / 2, width);
-            width = Math.max (1,          width);
-            setDotWidth ((int) width);
+            double timeSteps = plot.getDomainAxis ().getRange ().getLength () / timeQuantum;
+            int    width     = (int) Math.ceil (clipBounds.width / timeSteps);
+            if      (width > 10) width -= 2;
+            else if (width > 2 ) width -= 1;
+            if (height >= 6) width = Math.min (width, height / 2);  // Enforce rectangular ticks at larger sizes. Looks better.
+            else             width = Math.min (width, 3);  // When there's a lot of horizontal space, but not much vertical space, don't go crazy on how wide the ticks get.
+            width = Math.max (width, 1);
+
+            setDotHeight (height);
+            setDotWidth (width);
 
             return super.initialise (g2, dataArea, plot, dataset, info);
         }

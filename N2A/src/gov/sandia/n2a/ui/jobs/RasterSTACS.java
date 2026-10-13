@@ -1,11 +1,12 @@
 /*
-Copyright 2022 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Copyright 2022-2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
 */
 
 package gov.sandia.n2a.ui.jobs;
 
+import java.awt.Color;
 import java.io.IOException;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
@@ -33,7 +34,7 @@ public class RasterSTACS extends Raster
     public RasterSTACS (Path path)
     {
         super (path);
-        timeQuantum = 1e-3;
+        timeQuantum = 1e-3f;
     }
 
     public void parse (Path path)
@@ -111,7 +112,7 @@ public class RasterSTACS extends Raster
         for (int i = current; i < count; i++)
         {
             Column c = columns.get (i);
-            if (c == null  ||  c.color == null) colors.add (red);
+            if (c == null  ||  c.color == null) colors.add (Color.black);
             else                                colors.add (c.color);
         }
 
