@@ -51,7 +51,7 @@ the U.S. Government retains certain rights in this software.
 template<class T>
 struct SHARED MatrixAbstract
 {
-    virtual ~MatrixAbstract () = 0;
+    virtual ~MatrixAbstract () = default;
     virtual uint32_t classID () const = 0;  ///< @return A bitvector indicating all the classes to which this object can be cast.  Hack to avoid the cost of dynamic_cast.
 
     virtual T   get         (int row, int column = 0) const = 0;  ///< Safe element accesss. Returns 0 if indices are out of range.
@@ -62,16 +62,17 @@ struct SHARED MatrixAbstract
 
 template<class T> class SHARED Matrix;
 
-template<class T> SHARED void      clear      (const MatrixAbstract<T> & A, T scalar = (T) 0);            ///< Set all elements to given value. const on A is a lie to allow transient matrix regions.
-template<class T> SHARED void      identity   (const MatrixAbstract<T> & A);                              ///< Set diagonal to 1 and all other elements to 0. Does not have to be a square matrix. const on A is a lie to allow transient matrix regions.
-template<class T> SHARED void      copy       (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B); ///< Copy overlap region from B into A. const on A is a lie to allow transient matrix regions.
-template<class T> SHARED T         norm       (const MatrixAbstract<T> & A, T n = (T) 2);                 ///< (sum_elements (element^n))^(1/n). Effectively: INFINITY is max, 1 is sum, 2 is standard Frobenius norm. n==0 is technically undefined, but we treat is as the count of non-zero elements.
-template<class T> SHARED T         sumSquares (const MatrixAbstract<T> & A);                              ///< Equivalent to norm(A,2)^2, but without taking the square root.
-template<class T> SHARED Matrix<T> normalize  (const MatrixAbstract<T> & A);                              ///< shortcut for A / norm (A, 2)
-template<class T> SHARED Matrix<T> cross      (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B);
-template<class T> SHARED Matrix<T> visit      (const MatrixAbstract<T> & A, T (*function) (const T &));   ///< Apply function() to each element, and return the results in a new Matrix of equal size.
-template<class T> SHARED Matrix<T> visit      (const MatrixAbstract<T> & A, T (*function) (T));     ///< Apply function() to each element, and return the results in a new Matrix of equal size.
-template<class T> SHARED bool      equal      (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B); ///< Checks that matrices are exactly the same shape and have exactly the same element values.
+template<class T> SHARED void      clear          (const MatrixAbstract<T> & A, T scalar = (T) 0);            ///< Set all elements to given value. const on A is a lie to allow transient matrix regions.
+template<class T> SHARED void      identity       (const MatrixAbstract<T> & A);                              ///< Set diagonal to 1 and all other elements to 0. Does not have to be a square matrix. const on A is a lie to allow transient matrix regions.
+template<class T> SHARED void      copy           (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B); ///< Copy overlap region from B into A. const on A is a lie to allow transient matrix regions.
+template<class T> SHARED T         norm           (const MatrixAbstract<T> & A, T n = (T) 2);                 ///< (sum_elements (element^n))^(1/n). Effectively: INFINITY is max, 1 is sum, 2 is standard Frobenius norm. n==0 is technically undefined, but we treat is as the count of non-zero elements.
+template<class T> SHARED T         sumSquares     (const MatrixAbstract<T> & A);                              ///< Equivalent to norm(A,2)^2, but without taking the square root.
+template<class T> SHARED Matrix<T> normalize      (const MatrixAbstract<T> & A);                              ///< shortcut for A / norm (A, 2)
+template<class T> SHARED Matrix<T> cross          (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B);
+template<class T> SHARED Matrix<T> visit          (const MatrixAbstract<T> & A, T (*function) (const T &));   ///< Apply function() to each element, and return the results in a new Matrix of equal size.
+template<class T> SHARED Matrix<T> visit          (const MatrixAbstract<T> & A, T (*function) (T));           ///< Apply function() to each element, and return the results in a new Matrix of equal size.
+template<class T> SHARED bool      equal          (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B); ///< Checks that matrices are exactly the same shape and have exactly the same element values.
+template<class T> SHARED Matrix<T> backSubstitute (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B, bool lower = false); ///< Solves AX=B, where A is in triangular form. If A is not square, extra rows or columns are ignored.
 
 // Elementwise logical operators
 template<class T> SHARED Matrix<T> operator == (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B);
@@ -98,6 +99,8 @@ template<class T>        Matrix<T> operator && (T scalar,                    con
 template<class T> SHARED Matrix<T> operator || (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B);
 template<class T> SHARED Matrix<T> operator || (const MatrixAbstract<T> & A, T scalar);
 template<class T>        Matrix<T> operator || (T scalar,                    const MatrixAbstract<T> & A) {return A || scalar;}
+
+template<class T> SHARED Matrix<T> operator ! (const MatrixAbstract<T> & A); ///< Invert
 
 template<class T> SHARED Matrix<T> operator & (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B); ///< Elementwise multiplication. The prettiest name for this operator would be ".*", but that is not overloadable.
 template<class T>        Matrix<T> operator * (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B) {return Matrix<T> (A) * B;} ///< Multiply whole matrices
@@ -155,7 +158,7 @@ struct SHARED MatrixStrided : public MatrixAbstract<T>
 };
 
 template<class T> SHARED void      clear (      MatrixStrided<T> & A, T scalar = (T) 0);
-template<class T> SHARED T         norm  (const MatrixStrided<T> & A, T n);  // For fixed-point, used alternate function declared below.
+template<class T> SHARED T         norm  (const MatrixStrided<T> & A, T n);  // For fixed-point, use alternate function declared below.
 template<class T> SHARED Matrix<T> visit (const MatrixStrided<T> & A, T (*function) (const T &));
 template<class T> SHARED Matrix<T> visit (const MatrixStrided<T> & A, T (*function) (T));
 
@@ -263,10 +266,10 @@ struct SHARED Matrix : public MatrixStrided<T>
     }
 };
 
-template<class T> SHARED Matrix<T> operator ~ (const Matrix<T> & A);
 template<class T> SHARED Matrix<T> row        (const Matrix<T> & A, int row);
 template<class T> SHARED Matrix<T> column     (const Matrix<T> & A, int column);
 template<class T> SHARED Matrix<T> region     (const Matrix<T> & A, int firstRow, int firstColumn, int lastRow = -1, int lastColumn = -1);
+template<class T> SHARED Matrix<T> operator ~ (const Matrix<T> & A);
 
 // MatrixFixed and its associated functions are not SHARED, because there's no
 // way to predict which instantiations will be used by which modules.
@@ -411,6 +414,138 @@ struct SHARED MatrixSparseRegion : public MatrixSparse<T>
     virtual void set         (int row, int column, T value);
     virtual T &  operator () (int row, int column = 0) const;
     virtual int  columns     () const;
+};
+
+/**
+    Interface for using matrix factorizations.
+
+    The factorization work is typically done by the constructor.
+    It takes the matrix to be factored, then sets up internal state
+    with results of the factorization. This can later be used by
+    solve() and invert().
+
+    By default, the functions of this class will not damage the matrices
+    passed as parameters. Furthermore, the class promises to keep its
+    internal state in a reusable form, so for example solve() can be
+    called multiple times. However, a subclass may allow you to pass a
+    flag that revokes these promises for the sake of memory efficiency.
+**/
+template<class T>
+struct SHARED Factorization
+{
+    virtual ~Factorization () = default;
+
+    /**
+        Resets all internal state and stores the factorization of A.
+    **/
+    virtual void factorize (const MatrixAbstract<T> & A) = 0;
+
+    /**
+        Solve AX=B, where A is the matrix represented by this factorization.
+        @return X
+    **/
+    virtual Matrix<T> solve (const MatrixAbstract<T> & B) = 0;
+
+    /**
+        @return The inverse of A, the matrix represented by this factorization.
+        If A is not square, returns the pseudo-inverse.
+        If A is not invertible, returns null.
+    **/
+    virtual Matrix<T> invert () = 0;
+};
+
+/**
+    QR Decomposition, computed by Householder reflections, with column pivoting.
+
+    Code taken from the public-domain packages JAMA (https://math.nist.gov/javanumerics/jama/)
+    and MINPACK (https://netlib.org/minpack).
+
+    Original comments from JAMA package ...
+
+    "For an m-by-n matrix A with m >= n, the QR decomposition is an m-by-n
+    orthogonal matrix Q and an n-by-n upper triangular matrix R so that A = Q*R.
+
+    "The QR decomposition always exists, even if the matrix does not have full
+    rank, so the constructor will never fail. The primary use of the QR
+    decomposition is in the least squares solution of non-square systems of
+    simultaneous linear equations. This will fail if isFullRank() returns false."
+
+    This class actually handles any shape of matrix: square (m=n), tall (m>n), wide (m<n).
+    In the tall case, it returns the reduced QR decomposition.
+    In the wide case, R is a trapezoid [R1 Q'A2].
+**/
+template<class T>
+struct FactorizationQR : public Factorization<T>
+{
+    // It is expected that a caller may want to these members directly.
+    // The functions that return component matrices are there
+    // as a convenience to reconstruct the relevant pieces, but there is nothing
+    // about this data that needs to be hidden. There are even circumstances in
+    // which it makes sense to modify the data. For example, the Levenberg-Marquardt
+    // algorithm has a use for modifying Rdiag.
+    Matrix<T>        QR; ///< Factored matrix. R occupies diagonal and upper-right triangle/trapezoid. Q occupies lower left triangle/trapezoid.
+    int              m;  ///< height of A
+    int              n;  ///< width of A
+    std::vector<T>   Qdiag;
+    std::vector<int> P;  ///< Permutation matrix, stored as a list. AP=QR. Matrix P(r,c)==1 iff list P[c]==r. That is, P[c] stores the original position of column c before it was permuted.
+
+    FactorizationQR ();
+    FactorizationQR (const MatrixAbstract<T> & A);
+
+    virtual void factorize (const MatrixAbstract<T> & A);
+
+    /**
+        @return Zero-based index of first element in diagonal of R that falls below threshold.
+        If no such element exists, result points one past the last element.
+    **/
+    int rank (T threshold);
+
+    /**
+        @return true if all elements of R are nonzero. Unlike rank(double), there is no threshold,
+        so this is a more relaxed criterion.
+    **/
+    bool isFullRank ();
+
+    /**
+        Return the Householder vectors
+        @return Lower trapezoidal matrix whose columns define the reflections
+    **/
+    Matrix<T> getH ();
+
+    /**
+        Return the upper triangular factor R
+    **/
+    Matrix<T> getR ();
+
+    /**
+        Generate and return the (economy-sized) orthogonal factor Q
+    **/
+    Matrix<T> getQ ();
+
+    Matrix<T> getP ();
+
+    /**
+        Least squares solution of AX = B, where m >= n.
+        @param B Matrix with exactly as many rows as A, along with any number of columns.
+        @return X that minimizes the two norm of AX-B.
+    **/
+    virtual Matrix<T> solve (const MatrixAbstract<T> & B);
+
+    /**
+        Least squares solution of AX = B, where A is wide (m < n) and factorization has been run on A' instead of A.
+        This class does not try to automate the choice between A and A'. The user must determine which is suitable.
+        @param B Matrix with exactly as many rows as original A (not A'), along with any number of columns.
+        @return X with smallest-norm that produces AX-B = exactly zero.
+    **/
+    Matrix<T> solveTranspose (const MatrixAbstract<T> & B);
+
+    /**
+        Determine the left inverse of A, where m >= n.
+    **/
+    virtual Matrix<T> invert ();
+
+    void saveRdiag (std::vector<T> & Rdiag);  ///< @param Rdiag will be resized to hold the diagonal. Previous content of vector will be overwritten.
+    void restoreRdiag (const std::vector<T> & Rdiag);
 };
 
 

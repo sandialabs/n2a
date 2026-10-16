@@ -23,11 +23,6 @@ the U.S. Government retains certain rights in this software.
 // class MatrixAbstract<T> --------------------------------------------------
 
 template<class T>
-MatrixAbstract<T>::~MatrixAbstract ()
-{
-}
-
-template<class T>
 void
 clear (const MatrixAbstract<T> & A, T scalar)
 {
@@ -217,6 +212,58 @@ equal (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B)
         }
     }
     return true;
+}
+
+template<class T>
+Matrix<T>
+backSubstitute (const MatrixAbstract<T> & A, const MatrixAbstract<T> & B, bool lower)
+{
+    int nx = B.columns ();
+    int mx = B.rows ();
+    int d = std::min (mx, std::min (A.rows (), A.columns ()));  // length of diagonal
+    Matrix<T> X (B);  // May contain excess elements, but hopefully that's a rare case.
+
+    T * Xdata = X.data;
+    if (lower)
+    {
+        // Iterate over the columns of X
+        for (int j = 0; j < nx; j++)
+        {
+            // Iterate over diagonal
+            for (int k = 0; k < d; k++)
+            {
+                int kj = k * X.strideR_ + j * X.strideC_;
+                if (Xdata[kj] == 0) continue;
+                T e = Xdata[kj] /= A(k,k);  // solve for element ij
+                // Apply effect of solved element to rest of column.
+                int ij = kj + X.strideR_;
+                for (int i = k+1; i < d; i++)
+                {
+                    Xdata[ij] -= e * A(i,k);
+                    ij += X.strideR_;
+                }
+            }
+        }
+    }
+    else  // upper
+    {
+        for (int j = 0; j < nx; j++)
+        {
+            for (int k = d-1; k >= 0; k--)
+            {
+                int kj = k * X.strideR_ + j * X.strideC_;
+                if (Xdata[kj] == 0) continue;
+                T e = Xdata[kj] /= A(k,k);
+                int ij = kj - X.strideR_;
+                for (int i = k-1; i >= 0; i--)
+                {
+                    Xdata[ij] -= e * A(i,k);
+                    ij -= X.strideR_;
+                }
+            }
+        }
+    }
+    return region (X, 0, 0, d-1, nx-1);
 }
 
 template<class T>
@@ -531,6 +578,27 @@ operator || (const MatrixAbstract<T> & A, T scalar)
         }
     }
     return result;
+}
+
+template<class T>
+Matrix<T>
+operator ! (const MatrixAbstract<T> & A)
+{
+    int w = A.columns ();
+    int h = A.rows ();
+
+    if (h >= w)
+    {
+        FactorizationQR<T> qr (A);
+        return qr.invert ();  // Exact inverse if square. Left inverse if h > w.
+    }
+    else  // h < w
+    {
+        // FactorizationQR can only be applied when h >= w. Instead, we apply it to the transpose to create the right inverse.
+        Matrix<T> M (A);  // Need dense matrix, because transpose is not available on abstract matrix.
+        FactorizationQR<T> qr (~M);
+        return qr.invert ();
+    }
 }
 
 template<class T>
@@ -1684,6 +1752,412 @@ region  (const Matrix<T> & A, int firstRow, int firstColumn, int lastRow, int la
                       lastColumn - firstColumn + 1,
                       A.strideR_,
                       A.strideC_);
+}
+
+
+// class FactorizationQR -----------------------------------------------------
+
+// TODO: The implementations here are only suitable for float or double. Need more careful work for int.
+
+template<class T>
+FactorizationQR<T>::FactorizationQR ()
+{
+}
+
+template<class T>
+FactorizationQR<T>::FactorizationQR (const MatrixAbstract<T> & A)
+{
+    factorize (A);
+}
+
+template<class T>
+void
+FactorizationQR<T>::factorize (const MatrixAbstract<T> & A)
+{
+    m = A.rows ();
+    n = A.columns ();
+    int d = std::min (m, n);
+
+    QR = Matrix<T> (A);  // Deep copy.
+    Qdiag.resize (d);
+    P.resize (n);
+    for (int c = 0; c < n; c++) P[c] = c;
+
+    // Main loop.
+    T * data = QR.data;
+    for (int k = 0; k < d; k++)
+    {
+        // Pivot remaining column with largest norm into column k.
+        //   Find column with largest norm.
+        T   bestNorm2  = (T) 0;
+        int bestColumn = k;
+        for (int c = k; c < n; c++)
+        {
+            T norm2 = 0;
+            int i   = c * m + k;  // (k,c). Only consider column in minor matrix.
+            int end = c * m + m;  // (m,c). Bottom of column c in QR.
+            while (i < end)
+            {
+                T e = data[i++];
+                norm2 += e * e;
+            }
+            if (norm2 > bestNorm2)  // This also happens when c == n-1 == k, so we get norm of last column by itself.
+            {
+                bestNorm2  = norm2;
+                bestColumn = c;
+            }
+        }
+        //   Swap columns
+        if (bestColumn != k)
+        {
+            int i   = k          * m;
+            int j   = bestColumn * m;
+            int end = i + m;
+            while (i < end)
+            {
+                T temp = data[i];
+                data[i] = data[j];
+                data[j] = temp;
+                i++;
+                j++;
+            }
+            int temp      = P[k];
+            P[k]          = P[bestColumn];
+            P[bestColumn] = temp;
+        }
+        T norm = std::sqrt (bestNorm2);
+
+        int kk = k * m + k;  // Index of diagonal element.
+        if (norm != 0)
+        {
+            // Form k-th Householder vector.
+            if (data[kk] < (T) 0) norm = -norm;
+            int i   = kk;
+            int end = k * m + m;
+            while (i < end) data[i++] /= norm;
+            data[kk] += 1;
+
+            // Apply transformation to remaining columns.
+            for (int j = k + 1; j < n; j++)
+            {
+                T s = (T) 0;
+                i = kk;
+                int kj = j * m + k;
+                int l = kj;
+                while (i < end) s += data[i++] * data[l++];
+
+                s /= data[kk];
+                i = kk;
+                l = kj;
+                while (i < end) data[l++] -= s * data[i++];
+            }
+        }
+        Qdiag[k] = data[kk];
+        data[kk] = -norm;
+    }
+}
+
+template<class T>
+int
+FactorizationQR<T>::rank (T threshold)
+{
+    int d = Qdiag.size ();
+    for (int j = 0; j < d; j++) if (std::abs (QR(j,j)) < threshold) return j;
+    return d;
+}
+
+template<class T>
+bool
+FactorizationQR<T>::isFullRank ()
+{
+    int d = Qdiag.size ();
+    for (int j = 0; j < d; j++) if (QR(j,j) == 0) return false;
+    return true;
+}
+
+template<class T>
+Matrix<T>
+FactorizationQR<T>::getH ()
+{
+    int d = Qdiag.size ();
+    Matrix<T> H (m, d);
+    clear (H);  // So upper triangular area does not need to be explicitly set.
+    T * Hdata  = H.data;
+    T * QRdata = QR.data;
+    for (int j = 0; j < d; j++)  // columns
+    {
+        int i   = j * m + j;
+        int end = j * m + m;
+        Hdata[i++] = Qdiag[j];  // Set diagonal element separately.
+        while (i < end) Hdata[i] = QRdata[i++];  // rows
+    }
+    return H;
+}
+
+template<class T>
+Matrix<T>
+FactorizationQR<T>::getR ()
+{
+    int d = Qdiag.size ();
+    Matrix<T> R (d, n);
+    clear (R);  // So lower triangular area does not need to be explicitly set.
+    int end = d * n;  // all of R data
+    T * Rdata  = R.data;
+    T * QRdata = QR.data;
+    for (int i = 0; i < d; i++)  // rows
+    {
+        int r = i * d + i;  // Index into R, initially at (i,i)
+        int j = i * m + i;  // Index into QR, initially at (i,i)
+        while (r < end)  // columns
+        {
+            Rdata[r] = QRdata[j];
+            r += d;
+            j += m;
+        }
+    }
+    return R;
+}
+
+template<class T>
+Matrix<T>
+FactorizationQR<T>::getQ ()
+{
+    int d = Qdiag.size ();
+    Matrix<T> Q (m, d);
+    clear (Q);  // The code below assumes that elements start with value zero.
+    T * Qdata  = Q.data;
+    T * QRdata = QR.data;
+    for (int k = d - 1; k >= 0; k--)
+    {
+        int kk  = k * m + k;
+        int end = k * m + m;
+        Qdata[kk] = 1;
+        if (Qdiag[k] == 0) continue;
+
+        for (int j = k; j < d; j++)
+        {
+            int q = j * m + k;
+            T s = Qdiag[k] * Qdata[q++];
+            int i = kk + 1;
+            while (i < end) s += QRdata[i++] * Qdata[q++];
+
+            q = j * m + k;
+            Qdata[q++] -= s;
+            s /= Qdiag[k];
+            i = kk + 1;
+            while (i < end) Qdata[q++] -= s * QRdata[i++];
+        }
+    }
+    return Q;
+}
+
+template<class T>
+Matrix<T>
+FactorizationQR<T>::getP ()
+{
+    Matrix<T> result (n, n);
+    clear (result);
+    for (int c = 0; c < n; c++) result(P[c],c) = 1;
+    return result;
+}
+
+template<class T>
+Matrix<T>
+FactorizationQR<T>::solve (const MatrixAbstract<T> & B)
+{
+    // Approach:
+    //   Note that A = QRP'
+    //   QRP'X = B
+    //   Let Y = Q'B
+    //   Solve R(P'X) = Y through back substitution
+    //   Un-permute P(P'X) --> X
+
+    if (m < n) throw "solve() can't work when rows are less then columns. Factorize A' insteand, then call solveTranspose().";
+    if (B.rows () != m) throw "B rows must agree with A rows.";
+
+    // Copy right hand side
+    int nx = B.columns ();
+    Matrix<T> X (B);
+
+    // Compute Y = Q'B
+    // This combines the job of getQ() with transpose and multiply by B.
+    // The transpose itself enables this simultaneous construction of Q during the multiply.
+    int d = Qdiag.size ();
+    T * QRdata = QR.data;
+    T * Xdata  = X .data;
+    for (int k = 0; k < d; k++)  // Iterate over diagonal of Q.
+    {
+        int kk  = k * m + k;
+        int end = k * m + m;  // (m,k). Bottom of column k in Q.
+        for (int j = 0; j < nx; j++)  // Iterate over columns of B.
+        {
+            // Partial dot product of column k in Q and column j in B, starting from row k.
+            int x = j * m + k;  // B(k,m)
+            T s = Qdiag[k] * Xdata[x++];
+            int a = kk + 1;
+            while (a < end) s += QRdata[a++] * Xdata[x++];
+
+            // Subtract product from column j in B.
+            x = j * m + k;
+            Xdata[x++] -= s;
+            s /= Qdiag[k];
+            a = kk + 1;
+            while (a < end) Xdata[x++] -= s * QRdata[a++];
+        }
+    }
+
+    // Solve R(P'X) = Y through back substitution
+    int Xend = m * nx;
+    for (int k = d-1; k >= 0; k--)
+    {
+        int j = k;  // iterate over row k
+        while (j < Xend)
+        {
+            Xdata[j] /= QRdata[k*m+k];
+            j += m;
+        }
+
+        int a = k * m;  // iterate over column k
+        for (int i = 0; i < k; i++)
+        {
+            j     = i;  // iterate over row i
+            int l = k;  // iterate over row k
+            T qr = QRdata[a++];
+            while (j < Xend)
+            {
+                Xdata[j] -= Xdata[l] * qr;
+                j += m;
+                l += m;
+            }
+        }
+    }
+
+    // Un-permute P(P'X) --> X
+    Matrix<T> result (n, nx);
+    T * data = result.data;
+    for (int f = 0; f < d; f++)  // from row
+    {
+        int x = f;    // index into X, at start of source row
+        int r = P[f]; // index into result, at start of destination row
+        while (x < Xend)
+        {
+            data[r] = Xdata[x];
+            x += m;
+            r += n;
+        }
+    }
+    return result;
+}
+
+template<class T>
+Matrix<T>
+FactorizationQR<T>::solveTranspose (const MatrixAbstract<T> & B)
+{
+    // Approach:
+    //   If QRP' = A', then PR'Q' = A.
+    //   Solve PR'Q'X = B.
+    //   Let Z = Q'X, and solve R'Z = P'B.
+    //   Finally, compute result as X = QZ.
+
+    if (B.rows () != n) throw "B rows must match A' columns, that is, original A rows.";
+    int nx = B.columns ();
+    int d = Qdiag.size ();  // Should be same as n.
+
+    // Construct P'B
+    Matrix<T> Z (n, nx);  // No need to clear, because we will write all elements.
+    T * Zdata = Z.data;
+    for (int r = 0; r < d; r++)  // from row
+    {
+        int b = P[r];  // source row in B (abstract matrix)
+        int z = r;     // index into Z, at start of destination row
+        for (int c = 0; c < nx; c++)
+        {
+            Zdata[z] = B(b,c);
+            z += n;
+        }
+    }
+
+    // Solve R'Z = P'B with forward substitution.
+    // This avoids an extra copy of R by transposing in-situ.
+    T * QRdata = QR.data;
+    for (int j = 0; j < nx; j++)  // Iterate over the columns of Z.
+    {
+        for (int k = 0; k < d; k++)  // Iterate over diagonal of R
+        {
+            int kj = k * Z.strideR_ + j * Z.strideC_;  // Accessing elements of Z in usual order.
+            if (Zdata[kj] == 0) continue;
+            int a = k * (QR.strideC_ + QR.strideR_);  // On diagonal of QR, which belongs to R rather than Q.
+            T e = Zdata[kj] /= QRdata[a];  // solve for element ij
+
+            // Apply effect of solved element to rest of column.
+            a += QR.strideC_;  // Step one position in R. Travel direction is across a single row, because we are transposing.
+            int ij  = kj + Z.strideR_;  // Step one position in Z (down a single column).
+            int end = d * Z.strideR_ + j * Z.strideC_;  // Stop iterating just before Z(d,j).
+            while (ij != end)
+            {
+                Zdata[ij] -= e * QRdata[a];
+                a  += QR.strideC_;
+                ij += Z .strideR_;
+            }
+        }
+    }
+
+    // Compute X = QZ
+    // Unlike in solve(), the lack of transpose on Q prevents its simultaneous construction.
+    // It is simpler to construct Q separately.
+    return getQ () * Z;
+}
+
+template<class T>
+Matrix<T>
+FactorizationQR<T>::invert ()
+{
+    // Approach:
+    //   LA = I
+    //   A = QRP'
+    //   !(QRP')A = I
+    //   L = !(QRP') = P!RQ'
+    //   Solve R(P'L) = Q' via back substitution.
+    //   Un-permute P(P'L) --> L
+
+    // Solve R(P'L) = Q' via back substitution.
+    Matrix<T> PL = backSubstitute (QR, ~ getQ ());
+
+    // Un-permute P(P'L) --> L
+    Matrix<T> result (n, m);
+    int d = Qdiag.size ();
+    int PLend = PL.rows () * PL.columns ();
+    T * data   = result.data;
+    T * PLdata = PL    .data;
+    for (int i = 0; i < d; i++)  // from row
+    {
+        int l   = i;    // index into PL, at start of source row
+        int r   = P[i]; // index into result, at start of destination row
+        while (l < PLend)
+        {
+            data[r] = PLdata[l];
+            l += n;
+            r += n;
+        }
+    }
+    return result;
+}
+
+template<class T>
+void
+FactorizationQR<T>::saveRdiag (std::vector<T> & Rdiag)
+{
+    int d = Qdiag.size ();
+    Rdiag.resize (d);
+    for (int j = 0; j < d; j++) Rdiag[j] = QR(j,j);
+}
+
+template<class T>
+void
+FactorizationQR<T>::restoreRdiag (const std::vector<T> & Rdiag)
+{
+    int d = Qdiag.size ();
+    for (int j = 0; j < d; j++) QR(j,j) = Rdiag[j];
 }
 
 
