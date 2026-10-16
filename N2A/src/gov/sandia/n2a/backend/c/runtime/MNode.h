@@ -1252,6 +1252,7 @@ namespace n2a
         String type;
 
         Schema (int version, const String & type);
+        virtual ~Schema () = default;
 
         /**
             Returns an object suitable for writing out MNodes in the current format.
