@@ -2,6 +2,16 @@
 Copyright 2018-2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
+
+What? Yet another string class?!
+Yes, because we want to use C++ style strings in bare-metal systems like SpiNNaker.
+Typical implementations of std::string bring in a lot of bloat, particularly for handling locales.
+This header-only implementation is purely byte-oriented. This works just fine with UTF-8, which
+is all we really care about these days.
+
+The alternative is to use a quality bare-metal library such as Embedded Template Library (ETL).
+That would add another dependency just for one feature (strings).
+Furthermore, ETL's approach to strings assumes no heap, whereas SpiNNaker does have a heap available.
 */
 
 
@@ -126,7 +136,7 @@ inline void append (char * & p, float value)
     // Align float to [1,10). This effectively transfers the exponent from binary
     // representation into decimal. This is also what we print out for "e" at the end.
     // Because this is done in floating-point, it destroys some precision. We're being lazy.
-    // TODO: adding FLT_EPSILON to log value breaks some output. Fix latter code to be less fragile to inexact alignment.
+    // TODO: adding FLT_EPSILON to logarithm breaks some output. Fix latter code to be less fragile to inexact alignment.
     int e = (int) log10f (value);  // Truncates the exponent to integer, which is what we want. This will leave as much as one digit above the decimal point.
     uint32_t threshold = 0xFFFFF7;  // Mantissa rounding threshold. 24 bits.
     if      (e > 6) value /= powf (10, e);
