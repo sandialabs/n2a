@@ -662,56 +662,10 @@ public abstract class Matrix extends Type
         throw new EvaluationException ("type mismatch");
     }
 
-    public double det22 (int r0, int r1, int c0, int c1)
-    {
-        return get (r0, c0) * get (r1, c1) - get (r0, c1) * get (r1, c0);
-    }
-
     public Type NOT () throws EvaluationException
     {
         int w = columns ();
         int h = rows ();
-        if (w == 1  &&  h == 1)
-        {
-            MatrixDense result = new MatrixDense (1, 1);
-            result.set (0, 0, 1 / get (0, 0));
-            return result;
-        }
-        if (w == 2  &&  h == 2)
-        {
-            MatrixDense result = new MatrixDense (2, 2);
-
-            double q = determinant ();
-            if (q == 0) throw new EvaluationException ("invert: Matrix is singular!");
-
-            result.set (0, 0, get (1, 1) /  q);
-            result.set (1, 0, get (1, 0) / -q);
-            result.set (0, 1, get (0, 1) / -q);
-            result.set (1, 1, get (0, 0) /  q);
-
-            return result;
-        }
-        if (w == 3  &&  h == 3)
-        {
-            MatrixDense result = new MatrixDense (3, 3);
-
-            double q = determinant ();
-            if (q == 0) throw new EvaluationException ("invert: Matrix is singular!");
-
-            result.set (0, 0, det22 (1, 2, 1, 2) / q);
-            result.set (1, 0, det22 (1, 2, 2, 0) / q);
-            result.set (2, 0, det22 (1, 2, 0, 1) / q);
-            result.set (0, 1, det22 (0, 2, 2, 1) / q);
-            result.set (1, 1, det22 (0, 2, 0, 2) / q);
-            result.set (2, 1, det22 (0, 2, 1, 0) / q);
-            result.set (0, 2, det22 (0, 1, 1, 2) / q);
-            result.set (1, 2, det22 (0, 1, 2, 0) / q);
-            result.set (2, 2, det22 (0, 1, 0, 1) / q);
-
-            return result;
-        }
-
-        // General cases -- Use QR decomposition to compute exact or Moore-Penrose inverse.
         if (h >= w)
         {
             FactorizationQR qr = new FactorizationQR (this);
@@ -719,9 +673,11 @@ public abstract class Matrix extends Type
         }
         else  // h < w
         {
-            // FactorizationQR can only be applied when h >= w. Instead, we apply it to the transpose to create the right inverse.
+            // FactorizationQR can only be applied when h >= w.
+            // Instead, we apply it to the transpose to create the right inverse,
+            // then transpose again to create left inverse.
             FactorizationQR qr = new FactorizationQR (transpose ());
-            return qr.invert ();
+            return qr.invert ().transpose ();
         }
     }
 

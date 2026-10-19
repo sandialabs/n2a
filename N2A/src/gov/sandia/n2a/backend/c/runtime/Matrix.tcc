@@ -597,7 +597,7 @@ operator ! (const MatrixAbstract<T> & A)
         // FactorizationQR can only be applied when h >= w. Instead, we apply it to the transpose to create the right inverse.
         Matrix<T> M (A);  // Need dense matrix, because transpose is not available on abstract matrix.
         FactorizationQR<T> qr (~M);
-        return qr.invert ();
+        return ~qr.invert ();
     }
 }
 
